@@ -16,3 +16,22 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
+
+// Debug PWA installation
+if ('onbeforeinstallprompt' in window) {
+  console.log('PWA install prompt is supported');
+} else {
+  console.log('PWA install prompt is NOT supported');
+}
+
+if ('serviceWorker' in navigator) {
+  console.log('Service Worker is supported');
+} else {
+  console.log('Service Worker is NOT supported');
+}
+
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  console.log('App is running in standalone mode');
+} else {
+  console.log('App is running in browser mode');
+}
