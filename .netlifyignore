@@ -1,0 +1,8 @@
+backend/
+bun.lockb
+.gitignore
+README.md
+electron/
+capacitor.config.ts
+resources/
+electron-builder.json
