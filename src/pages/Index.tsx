@@ -117,6 +117,46 @@ const Index = () => {
           </Card>
         </div>
 
+        {/* Download Section */}
+        <div className="mt-20 text-center">
+          <h3 className="text-3xl font-bold mb-8">Download the App</h3>
+          <p className="text-lg text-muted-foreground mb-8">
+            Get the full experience on your mobile or desktop device
+          </p>
+          <div className="flex gap-4 justify-center flex-wrap">
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => window.open('https://play.google.com/store', '_blank')}
+            >
+              <Store className="h-5 w-5" />
+              Android App
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => window.open('https://apps.apple.com', '_blank')}
+            >
+              <Store className="h-5 w-5" />
+              iOS App
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => window.open('https://github.com/Maish7315/maish-sale-frontend/releases', '_blank')}
+            >
+              <Store className="h-5 w-5" />
+              Desktop App
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mt-4">
+            Or install as a web app by clicking "Add to Home Screen" in your browser
+          </p>
+        </div>
+
         {/* CTA Section */}
         <div className="mt-20 text-center">
           <Card className="max-w-2xl mx-auto shadow-xl bg-gradient-to-br from-primary/5 to-accent/5 border-2">

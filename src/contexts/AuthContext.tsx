@@ -52,19 +52,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = async (username: string, password: string) => {
     try {
       setLoading(true);
-      const result = await login({ username, password });
+      // Temporarily disabled for frontend-only testing
+      // const result = await login({ username, password });
 
-      if (result.token) {
-        // Decode token to get user info
-        const payload = JSON.parse(atob(result.token.split('.')[1]));
+      // Mock login for testing
+      if (username && password) {
         setUser({
-          id: payload.id,
-          username: payload.username,
-          role: payload.role,
+          id: 1,
+          username: username,
+          role: 'staff',
         });
 
         toast.success('Welcome back!');
         navigate('/dashboard');
+      } else {
+        throw new Error('Invalid credentials');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login failed';
@@ -78,19 +80,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (username: string, fullName: string, password: string) => {
     try {
       setLoading(true);
-      const result = await signup({ username, full_name: fullName, password });
+      // Temporarily disabled for frontend-only testing
+      // const result = await signup({ username, full_name: fullName, password });
 
-      if (result.token) {
-        // Decode token to get user info
-        const payload = JSON.parse(atob(result.token.split('.')[1]));
+      // Mock signup for testing
+      if (username && fullName && password) {
         setUser({
-          id: payload.id,
-          username: payload.username,
-          role: payload.role,
+          id: 1,
+          username: username,
+          role: 'staff',
         });
 
         toast.success('Account created successfully!');
         navigate('/dashboard');
+      } else {
+        throw new Error('Invalid data');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Signup failed';
