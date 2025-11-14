@@ -5,11 +5,14 @@ import { format } from 'date-fns';
 import { DollarSign, Calendar, Image as ImageIcon } from 'lucide-react';
 
 interface Sale {
-  id: string;
-  item_name: string;
-  amount: number;
-  commission: number;
-  receipt_url: string | null;
+  id: number;
+  user_id: number;
+  item_description: string;
+  amount_cents: number;
+  commission_cents: number;
+  timestamp: string;
+  photo_path: string | null;
+  status: string;
   created_at: string;
 }
 
@@ -48,39 +51,39 @@ export const SalesList = ({ sales }: SalesListProps) => {
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h4 className="font-semibold text-lg">{sale.item_name}</h4>
+                      <h4 className="font-semibold text-lg">{sale.item_description}</h4>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                         <Calendar className="h-3 w-3" />
                         {format(new Date(sale.created_at), 'PPp')}
                       </div>
                     </div>
-                    {sale.receipt_url && (
+                    {sale.photo_path && (
                       <Badge variant="outline" className="gap-1">
                         <ImageIcon className="h-3 w-3" />
                         Receipt
                       </Badge>
                     )}
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
                     <div>
                       <p className="text-sm text-muted-foreground">Sale Amount</p>
                       <p className="text-xl font-bold text-primary">
-                        KES {parseFloat(sale.amount.toString()).toFixed(2)}
+                        KES {(sale.amount_cents / 100).toFixed(2)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Commission (2%)</p>
                       <p className="text-xl font-bold text-accent">
-                        KES {parseFloat(sale.commission.toString()).toFixed(2)}
+                        KES {(sale.commission_cents / 100).toFixed(2)}
                       </p>
                     </div>
                   </div>
 
-                  {sale.receipt_url && (
+                  {sale.photo_path && (
                     <div className="mt-4">
                       <img
-                        src={sale.receipt_url}
+                        src={sale.photo_path}
                         alt="Receipt"
                         className="w-full h-32 object-cover rounded-lg border"
                       />

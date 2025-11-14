@@ -10,12 +10,12 @@ import { Loader2, Store } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
-  name: z.string().trim().min(2, { message: 'Name must be at least 2 characters' }).max(100),
+  username: z.string().trim().min(2, { message: 'Username must be at least 2 characters' }).max(100),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
 });
 
 const Login = () => {
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, user } = useAuth();
@@ -31,21 +31,15 @@ const Login = () => {
     e.preventDefault();
 
     try {
-      const validated = loginSchema.parse({ name, password });
+      const validated = loginSchema.parse({ username, password });
       setLoading(true);
 
-      const { error } = await signIn(validated.name, validated.password);
-
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Invalid email or password');
-        } else {
-          toast.error(error.message || 'Failed to sign in');
-        }
-      }
+      await signIn(validated.username, validated.password);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
       }
     } finally {
       setLoading(false);
@@ -67,13 +61,13 @@ const Login = () => {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="name"
+                id="username"
                 type="text"
-                placeholder="John Doe"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                placeholder="johndoe"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 disabled={loading}
                 autoComplete="username"

@@ -1,133 +1,124 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { login, signup, logout, isAuthenticated } from '@/services/api';
+
+interface User {
+  id: number;
+  username: string;
+  role: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
-  signIn: (identifier: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
-  signOut: () => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
+  signUp: (username: string, fullName: string, password: string) => Promise<void>;
+  signOut: () => void;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+    // Check if user is already authenticated on app load
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // Decode token to get user info (simple decode, not full JWT verification)
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          setUser({
+            id: payload.id,
+            username: payload.username,
+            role: payload.role,
+          });
+        } catch (error) {
+          // Invalid token, clear it
+          localStorage.removeItem('token');
+        }
       }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
       setLoading(false);
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    checkAuth();
   }, []);
 
-  const signIn = async (identifier: string, password: string) => {
-    // First, try to determine if identifier is an email or name
-    const isEmail = identifier.includes('@');
+  const signIn = async (username: string, password: string) => {
+    try {
+      setLoading(true);
+      const result = await login({ username, password });
 
-    const email = isEmail ? identifier : null;
+      if (result.token) {
+        // Decode token to get user info
+        const payload = JSON.parse(atob(result.token.split('.')[1]));
+        setUser({
+          id: payload.id,
+          username: payload.username,
+          role: payload.role,
+        });
 
-    if (!isEmail) {
-      // Look up email by name from profiles table
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('full_name', identifier)
-        .single();
-
-      if (profileError || !profile?.email) {
-        return { error: { message: 'Invalid name or password' } };
-      }
-
-      const lookedUpEmail = profile.email;
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: lookedUpEmail,
-        password,
-      });
-
-      if (!error) {
         toast.success('Welcome back!');
         navigate('/dashboard');
       }
-
-      return { error };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    // Direct email login
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email!,
-      password,
-    });
-
-    if (!error) {
-      toast.success('Welcome back!');
-      navigate('/dashboard');
-    }
-
-    return { error };
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/dashboard`;
+  const signUp = async (username: string, fullName: string, password: string) => {
+    try {
+      setLoading(true);
+      const result = await signup({ username, full_name: fullName, password });
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
+      if (result.token) {
+        // Decode token to get user info
+        const payload = JSON.parse(atob(result.token.split('.')[1]));
+        setUser({
+          id: payload.id,
+          username: payload.username,
+          role: payload.role,
+        });
 
-    if (!error && data.user) {
-      // Store email in profiles table for name-based login
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ email: email })
-        .eq('id', data.user.id);
-
-      if (profileError) {
-        console.warn('Failed to store email in profile:', profileError);
+        toast.success('Account created successfully!');
+        navigate('/dashboard');
       }
-
-      toast.success('Account created successfully! Remember your name and password for login.');
-      navigate('/dashboard');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Signup failed';
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    return { error };
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = () => {
+    logout();
+    setUser(null);
     toast.success('Signed out successfully');
     navigate('/');
   };
 
+  const value = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    isAuthenticated: isAuthenticated(),
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

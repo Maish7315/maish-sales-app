@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { createSale } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2, Upload, WifiOff } from 'lucide-react';
+import { Loader2, Upload } from 'lucide-react';
 import { z } from 'zod';
 
 const saleSchema = z.object({
@@ -20,7 +19,6 @@ interface SalesFormProps {
 
 export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
   const { user } = useAuth();
-  const { isOnline, saveOfflineSale } = useOfflineSync(user?.id);
   const [itemName, setItemName] = useState('');
   const [amount, setAmount] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -35,8 +33,12 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('File size must be less than 10MB');
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit to match backend
+        toast.error('File size must be less than 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        toast.error('Only image files are allowed');
         return;
       }
       setReceiptFile(file);
@@ -62,66 +64,19 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
       // Calculate commission (2%)
       const commission = validated.amount * 0.02;
 
-      // If offline, save to localStorage
-      if (!isOnline) {
-        await saveOfflineSale({
-          user_id: user?.id || '',
-          item_name: validated.itemName,
-          amount: validated.amount,
-          commission: commission,
-          receipt_file: receiptFile || undefined,
-        });
-
-        // Reset form
-        setItemName('');
-        setAmount('');
-        setReceiptFile(null);
-        onSaleAdded();
-        return;
-      }
-
-      // Upload receipt if provided and online
-      let receiptUrl = null;
-      if (receiptFile) {
-        const fileExt = receiptFile.name.split('.').pop();
-        const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('receipts')
-          .upload(fileName, receiptFile);
-
-        if (uploadError) {
-          throw new Error('Failed to upload receipt');
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('receipts')
-          .getPublicUrl(fileName);
-        
-        receiptUrl = publicUrl;
-      }
-
-      // Insert sale
-      const { error: insertError } = await supabase
-        .from('sales')
-        .insert({
-          user_id: user?.id,
-          item_name: validated.itemName,
-          amount: validated.amount,
-          commission: commission,
-          receipt_url: receiptUrl,
-          synced: true,
-        });
-
-      if (insertError) throw insertError;
+      // Create sale using our API
+      await createSale({
+        itemName: validated.itemName,
+        amount: validated.amount,
+      }, receiptFile || undefined);
 
       toast.success(`Sale recorded! Commission: KES ${commission.toFixed(2)}`);
-      
+
       // Reset form
       setItemName('');
       setAmount('');
       setReceiptFile(null);
-      
+
       onSaleAdded();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -138,18 +93,6 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {!isOnline && (
-        <div className="bg-muted border-l-4 border-accent p-4 rounded-md flex items-start gap-3">
-          <WifiOff className="h-5 w-5 text-accent mt-0.5" />
-          <div className="flex-1">
-            <p className="font-medium text-sm">Offline Mode</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Sales will be saved locally and synced when you're back online
-            </p>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-2">
         <Label htmlFor="itemName">Item Name / Description</Label>
         <Input
@@ -229,7 +172,7 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
         ) : (
           <>
             <Upload className="mr-2 h-4 w-4" />
-            {isOnline ? 'Record Sale' : 'Save Offline'}
+            Record Sale
           </>
         )}
       </Button>
