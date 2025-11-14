@@ -58,7 +58,18 @@ export const signup = async (data) => {
   console.log('Using mock signup - backend not available');
   return new Promise((resolve) => {
     setTimeout(() => {
-      const mockToken = btoa(JSON.stringify({ id: Date.now(), username: data.username, role: 'staff' }));
+      // Create a proper JWT-like token that can be decoded
+      const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const payload = btoa(JSON.stringify({
+        id: Date.now(),
+        username: data.username,
+        role: 'staff',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600
+      })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const signature = 'mock_signature';
+      const mockToken = `${header}.${payload}.${signature}`;
+
       localStorage.setItem('token', mockToken);
       resolve({ token: mockToken, user: { id: Date.now(), username: data.username, role: 'staff' } });
     }, 1000);
@@ -70,7 +81,18 @@ export const login = async (data) => {
   console.log('Using mock login - backend not available');
   return new Promise((resolve) => {
     setTimeout(() => {
-      const mockToken = btoa(JSON.stringify({ id: Date.now(), username: data.username, role: 'staff' }));
+      // Create a proper JWT-like token that can be decoded
+      const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const payload = btoa(JSON.stringify({
+        id: Date.now(),
+        username: data.username,
+        role: 'staff',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600
+      })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const signature = 'mock_signature';
+      const mockToken = `${header}.${payload}.${signature}`;
+
       localStorage.setItem('token', mockToken);
       resolve({ token: mockToken, user: { id: Date.now(), username: data.username, role: 'staff' } });
     }, 1000);
