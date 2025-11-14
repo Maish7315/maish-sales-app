@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Upload } from 'lucide-react';
 import { z } from 'zod';
+import { ImageCropper } from './ImageCropper';
 
 const saleSchema = z.object({
   itemName: z.string().trim().min(1, { message: 'Item name is required' }).max(200),
@@ -23,6 +24,8 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
   const [amount, setAmount] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<File | null>(null);
 
   const isWithinBusinessHours = () => {
     const now = new Date();
@@ -33,16 +36,34 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit to match backend
-        toast.error('File size must be less than 5MB');
-        return;
-      }
       if (!file.type.startsWith('image/')) {
         toast.error('Only image files are allowed');
         return;
       }
-      setReceiptFile(file);
+
+      // Check if file is too large and needs cropping
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setImageToCrop(file);
+        setShowCropper(true);
+      } else {
+        setReceiptFile(file);
+      }
     }
+  };
+
+  const handleCropComplete = (croppedFile: File) => {
+    setReceiptFile(croppedFile);
+    setShowCropper(false);
+    setImageToCrop(null);
+    toast.success('Image cropped successfully!');
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setImageToCrop(null);
+    // Clear the file input
+    const fileInput = document.getElementById('receipt') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,6 +97,8 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
       setItemName('');
       setAmount('');
       setReceiptFile(null);
+      setImageToCrop(null);
+      setShowCropper(false);
 
       onSaleAdded();
     } catch (error) {
@@ -176,6 +199,16 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
           </>
         )}
       </Button>
+
+      {/* Image Cropper Modal */}
+      {showCropper && imageToCrop && (
+        <ImageCropper
+          imageFile={imageToCrop}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+          maxSizeMB={5}
+        />
+      )}
     </form>
   );
 };
