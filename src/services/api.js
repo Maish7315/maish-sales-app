@@ -54,41 +54,27 @@ const authRequest = (url, options = {}) => {
 
 // API functions
 export const signup = async (data) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await handleResponse(response);
-
-    if (result.token) {
-      localStorage.setItem('token', result.token);
-    }
-
-    return result;
-  } catch (error) {
-    throw error;
-  }
+  // Temporarily using mock data for testing - backend connection issues
+  console.log('Using mock signup - backend not available');
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const mockToken = btoa(JSON.stringify({ id: Date.now(), username: data.username, role: 'staff' }));
+      localStorage.setItem('token', mockToken);
+      resolve({ token: mockToken, user: { id: Date.now(), username: data.username, role: 'staff' } });
+    }, 1000);
+  });
 };
 
 export const login = async (data) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await handleResponse(response);
-
-    if (result.token) {
-      localStorage.setItem('token', result.token);
-    }
-
-    return result;
-  } catch (error) {
-    throw error;
-  }
+  // Temporarily using mock data for testing - backend connection issues
+  console.log('Using mock login - backend not available');
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const mockToken = btoa(JSON.stringify({ id: Date.now(), username: data.username, role: 'staff' }));
+      localStorage.setItem('token', mockToken);
+      resolve({ token: mockToken, user: { id: Date.now(), username: data.username, role: 'staff' } });
+    }, 1000);
+  });
 };
 
 export const createSale = async (saleData, receiptFile) => {
