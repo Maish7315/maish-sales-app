@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { createSale } from '@/services/api';
+import { saveSaleLocally, createSale } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,16 +80,27 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
         amount: parseFloat(amount),
       });
 
-      setLoading(true);
-
       // Calculate commission (2%)
       const commission = validated.amount * 0.02;
 
-      // Create sale using our API
-      await createSale({
-        itemName: validated.itemName,
-        amount: validated.amount,
-      }, receiptFile || undefined);
+      setLoading(true);
+
+      try {
+        // Try to save to backend first
+        await createSale({
+          item_description: validated.itemName,
+          amount: validated.amount,
+        }, receiptFile);
+        toast.success(`Sale recorded successfully! Commission: KES ${commission.toFixed(2)}`);
+      } catch (backendError) {
+        console.warn('Backend save failed, saving locally:', backendError);
+        // Fallback to local storage
+        await saveSaleLocally({
+          itemName: validated.itemName,
+          amount: validated.amount,
+        }, receiptFile);
+        toast.success(`Sale recorded locally! Will sync when online. Commission: KES ${commission.toFixed(2)}`);
+      }
 
       toast.success(`Sale recorded! Commission: KES ${commission.toFixed(2)}`);
 

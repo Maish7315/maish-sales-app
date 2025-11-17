@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 const loginSchema = z.object({
   username: z.string().trim().min(2, { message: 'Username must be at least 2 characters' }).max(100),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+  password: z.string().regex(/^\d+$/, { message: 'Password must contain only numbers' }).min(4, { message: 'Password must be at least 4 digits' }),
 });
 
 const Login = () => {
@@ -70,21 +70,21 @@ const Login = () => {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 disabled={loading}
-                autoComplete="username"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Password (Numbers Only)</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="123456"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
-                minLength={6}
-                autoComplete="current-password"
+                minLength={4}
+                inputMode="numeric"
+                pattern="[0-9]*"
               />
             </div>
           </CardContent>

@@ -1,8 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import { DollarSign, Calendar, Image as ImageIcon } from 'lucide-react';
+import { useState } from 'react';
 
 interface Sale {
   id: number;
@@ -22,6 +24,8 @@ interface SalesListProps {
 }
 
 export const SalesList = ({ sales }: SalesListProps) => {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
   if (sales.length === 0) {
     return (
       <Card className="shadow-md">
@@ -82,11 +86,30 @@ export const SalesList = ({ sales }: SalesListProps) => {
 
                   {sale.photo_path && (
                     <div className="mt-4">
-                      <img
-                        src={sale.photo_path}
-                        alt="Receipt"
-                        className="w-full h-32 object-cover rounded-lg border"
-                      />
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button className="w-full">
+                            <img
+                              src={sale.photo_path}
+                              alt="Receipt"
+                              className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+                          <div className="relative flex items-center justify-center min-h-[200px]">
+                            <img
+                              src={sale.photo_path}
+                              alt="Receipt - Full Size"
+                              className="max-w-full max-h-[85vh] object-contain"
+                              style={{ imageRendering: 'auto' }}
+                            />
+                            <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
+                              {sale.item_description}
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   )}
                 </CardContent>

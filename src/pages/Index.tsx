@@ -12,11 +12,7 @@ const Index = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
 
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard');
-    }
-  }, [user, loading, navigate]);
+  // Removed automatic redirect to dashboard so users can see the nav bar with avatar
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -41,13 +37,23 @@ const Index = () => {
       setIsInstallable(false);
     } else {
       console.log('App is not installed, checking for installability');
-      // For testing, let's assume it's installable
-      setTimeout(() => {
-        if (!deferredPrompt) {
-          console.log('No deferred prompt, but showing button for testing');
-          setIsInstallable(true);
-        }
-      }, 2000);
+      // Check if it's a mobile device that supports PWA
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+
+      if (isMobile && (isIOS || isAndroid)) {
+        console.log('Mobile device detected, showing install button');
+        setIsInstallable(true);
+      } else {
+        // For desktop or other devices, wait for beforeinstallprompt or show after delay
+        setTimeout(() => {
+          if (!deferredPrompt && !isMobile) {
+            console.log('No deferred prompt on desktop, showing button');
+            setIsInstallable(true);
+          }
+        }, 2000);
+      }
     }
 
     return () => {
@@ -66,9 +72,17 @@ const Index = () => {
       }
       setDeferredPrompt(null);
     } else {
-      // Fallback: try to trigger browser's install prompt
-      console.log('No deferred prompt available, install manually via browser');
-      alert('Please use your browser\'s install button (usually in the address bar) to install the app.');
+      // Fallback for mobile devices
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+
+      if (isIOS) {
+        alert('To install on iOS: Tap the Share button (📤) at the bottom of the screen, then select "Add to Home Screen".');
+      } else if (isAndroid) {
+        alert('To install on Android: Look for the "Add to Home Screen" banner at the top of the page, or tap the menu (⋮) and select "Add to Home Screen".');
+      } else {
+        alert('Please use your browser\'s install button (usually in the address bar) to install the app.');
+      }
     }
   };
 
@@ -80,69 +94,134 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10">
       {/* Hero Section */}
       <header className="container mx-auto px-4 py-8">
-        <nav className="flex justify-between items-center">
+        <nav className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-brand rounded-2xl flex items-center justify-center shadow-primary">
               <img src={loggo} alt="Maish Boutique Logo" className="h-8 w-8 object-contain" />
             </div>
             <h1 className="text-2xl font-bold">Maish Boutique</h1>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => navigate('/login')}>
-              Sign In
-            </Button>
-            <Button
-              className="bg-gradient-primary hover:opacity-90 shadow-primary"
-              onClick={() => navigate('/signup')}
-            >
-              Get Started
-            </Button>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <>
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt="Profile"
+                    className="w-8 h-8 rounded-full object-cover border-2 border-primary"
+                  />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-brand rounded-full flex items-center justify-center text-white text-sm font-bold">
+                    {user.username?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/dashboard')}
+                >
+                  Dashboard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/login')}
+                >
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => navigate('/login')}>
+                  Sign In
+                </Button>
+                <Button
+                  className="bg-gradient-primary hover:opacity-90 shadow-primary"
+                  onClick={() => navigate('/signup')}
+                >
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </nav>
       </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-16">
-        <div className="text-center max-w-3xl mx-auto mb-16 space-y-6">
-          <h2 className="text-5xl font-bold leading-tight">
-            Track Your Sales,
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-brand">
-              Maximize Your Earnings
-            </span>
-          </h2>
-          <p className="text-xl text-muted-foreground">
-            Maish Boutique's employee commission tracker. Record sales, upload receipts,
-            and track your 2% commission in real-time.
-          </p>
-          <div className="flex gap-4 justify-center pt-4 flex-wrap">
-            {isInstallable && (
+        {user ? (
+          /* Welcome back section for logged-in users */
+          <div className="text-center max-w-3xl mx-auto space-y-8">
+            <div className="flex justify-center mb-6">
+              {user.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover border-4 border-primary shadow-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 bg-gradient-brand rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+                  {user.username?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              )}
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-4xl font-bold">
+                Welcome back, <span className="text-primary">{user.username}!</span>
+              </h2>
+              <p className="text-xl text-muted-foreground">
+                Ready to track your sales and commissions?
+              </p>
+              <div className="flex gap-4 justify-center pt-6">
+                <Button
+                  size="lg"
+                  className="bg-gradient-primary hover:opacity-90 shadow-primary text-lg"
+                  onClick={() => navigate('/dashboard')}
+                >
+                  Go to Dashboard
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => navigate('/dashboard')}
+                >
+                  View Sales History
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Marketing content for non-logged-in users */
+          <div className="text-center max-w-3xl mx-auto mb-16 space-y-6">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight">
+              Track Your Sales,
+              <br />
+              <span className="text-transparent bg-clip-text bg-gradient-brand">
+                Maximize Your Earnings
+              </span>
+            </h2>
+            <p className="text-xl text-muted-foreground">
+              Maish Boutique's employee commission tracker. Record sales, upload receipts,
+              and track your 2% commission in real-time.
+            </p>
+            <div className="flex gap-4 justify-center pt-4 flex-wrap">
               <Button
                 size="lg"
-                className="bg-green-600 hover:bg-green-700 shadow-lg text-lg mb-4"
-                onClick={handleInstallClick}
+                className="bg-gradient-primary hover:opacity-90 shadow-primary text-lg"
+                onClick={() => navigate('/signup')}
               >
-                <Download className="mr-2 h-5 w-5" />
-                Download App
+                Create Account Now
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
-            )}
-            <Button
-              size="lg"
-              className="bg-gradient-primary hover:opacity-90 shadow-primary text-lg"
-              onClick={() => navigate('/signup')}
-            >
-              Create Account Now
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => navigate('/login')}
-            >
-              Sign In
-            </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => navigate('/login')}
+              >
+                Sign In
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Features */}
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
@@ -187,40 +266,27 @@ const Index = () => {
         <div className="mt-20 text-center">
           <h3 className="text-3xl font-bold mb-8">Download the App</h3>
           <p className="text-lg text-muted-foreground mb-8">
-            Get the full experience on your mobile or desktop device
+            Install as a web app for the best experience on your device
           </p>
-          <div className="flex gap-4 justify-center flex-wrap">
+          {isInstallable ? (
             <Button
               size="lg"
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => window.open('https://play.google.com/store', '_blank')}
+              className="bg-green-600 hover:bg-green-700 shadow-lg text-lg"
+              onClick={handleInstallClick}
             >
-              <Store className="h-5 w-5" />
-              Android App
+              <Download className="mr-2 h-5 w-5" />
+              Install App
             </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => window.open('https://apps.apple.com', '_blank')}
-            >
-              <Store className="h-5 w-5" />
-              iOS App
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => window.open('https://github.com/Maish7315/maish-sale-frontend/releases', '_blank')}
-            >
-              <Store className="h-5 w-5" />
-              Desktop App
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground mt-4">
-            Or install as a web app by clicking "Add to Home Screen" in your browser
-          </p>
+          ) : (
+            <div className="text-muted-foreground space-y-2">
+              <p className="font-medium">Installation Instructions:</p>
+              <div className="text-sm space-y-1">
+                <p><strong>iOS (Safari):</strong> Tap Share button → "Add to Home Screen"</p>
+                <p><strong>Android (Chrome):</strong> Look for "Add to Home Screen" banner or tap menu → "Add to Home Screen"</p>
+                <p><strong>Desktop:</strong> Click the install icon in the address bar</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* CTA Section */}

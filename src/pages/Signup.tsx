@@ -8,20 +8,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from 'sonner';
 import { Loader2, Store } from 'lucide-react';
 import { z } from 'zod';
+import { isWeakPassword } from '@/services/api';
 
 const signupSchema = z.object({
   username: z.string().trim().min(2, { message: 'Username must be at least 2 characters' }).max(100),
-  fullName: z.string().trim().min(2, { message: 'Name must be at least 2 characters' }).max(100),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+  password: z.string().regex(/^\d+$/, { message: 'Password must contain only numbers' }).min(4, { message: 'Password must be at least 4 digits' }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
+}).refine((data) => !isWeakPassword(data.password), {
+  message: "Password is too weak. Please choose a different combination",
+  path: ["password"],
 });
 
 const Signup = () => {
   const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,10 +40,10 @@ const Signup = () => {
     e.preventDefault();
 
     try {
-      const validated = signupSchema.parse({ username, fullName, password, confirmPassword });
+      const validated = signupSchema.parse({ username, password, confirmPassword });
       setLoading(true);
 
-      await signUp(validated.username, validated.fullName, validated.password);
+      await signUp(validated.username, validated.password);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -80,29 +82,19 @@ const Signup = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="John Doe"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Password (Numbers Only)</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="123456"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
-                minLength={6}
+                minLength={4}
                 autoComplete="new-password"
+                inputMode="numeric"
+                pattern="[0-9]*"
               />
             </div>
             <div className="space-y-2">
@@ -110,13 +102,15 @@ const Signup = () => {
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="••••••••"
+                placeholder="123456"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 disabled={loading}
-                minLength={6}
+                minLength={4}
                 autoComplete="new-password"
+                inputMode="numeric"
+                pattern="[0-9]*"
               />
             </div>
           </CardContent>

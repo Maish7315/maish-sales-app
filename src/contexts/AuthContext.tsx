@@ -1,19 +1,21 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { login, signup, logout, isAuthenticated } from '@/services/api';
+import { login, signup, logout, isAuthenticated, getUserAvatar, saveUserAvatar, saveUserCredentials, getUserCredentials, validateUserCredentials, isWeakPassword } from '@/services/api';
 
 interface User {
   id: number;
   username: string;
   role: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (username: string, password: string) => Promise<void>;
-  signUp: (username: string, fullName: string, password: string) => Promise<void>;
+  signUp: (username: string, password: string) => Promise<void>;
+  updateAvatar: (avatarFile: File) => Promise<void>;
   signOut: () => void;
   isAuthenticated: boolean;
 }
@@ -52,20 +54,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = async (username: string, password: string) => {
     try {
       setLoading(true);
+
+      // Validate password format
+      if (!/^\d+$/.test(password)) {
+        throw new Error('Password must contain only numbers');
+      }
+
+      // Attempt backend login
       const result = await login({ username, password });
 
-      if (result.token) {
-        // Decode token to get user info
-        const payload = JSON.parse(atob(result.token.split('.')[1]));
-        setUser({
-          id: payload.id,
-          username: payload.username,
-          role: payload.role,
-        });
+      // Set user session from backend response
+      setUser({
+        id: result.user.id,
+        username: result.user.username,
+        role: result.user.role,
+        avatar: result.user.avatar || undefined,
+      });
 
-        toast.success('Welcome back!');
-        navigate('/dashboard');
+      toast.success(`Welcome back ${username}! Make sure you record true sales.`, {
+        duration: 5000,
+      });
+
+      // Sync local sales to backend if any exist
+      try {
+        const { syncLocalSalesToBackend } = await import('@/services/api');
+        await syncLocalSalesToBackend();
+        toast.success('Local sales synced to backend');
+      } catch (error) {
+        console.error('Sync failed:', error);
+        // Don't throw here, login was successful
       }
+
+      navigate('/dashboard');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login failed';
       toast.error(message);
@@ -75,25 +95,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (username: string, fullName: string, password: string) => {
+  const signUp = async (username: string, password: string) => {
     try {
       setLoading(true);
-      const result = await signup({ username, full_name: fullName, password });
 
-      if (result.token) {
-        // Decode token to get user info
-        const payload = JSON.parse(atob(result.token.split('.')[1]));
-        setUser({
-          id: payload.id,
-          username: payload.username,
-          role: payload.role,
-        });
-
-        toast.success('Account created successfully!');
-        navigate('/dashboard');
+      // Validate password format
+      if (!/^\d+$/.test(password)) {
+        throw new Error('Password must contain only numbers');
       }
+
+      // Check for weak passwords
+      if (isWeakPassword(password)) {
+        throw new Error('Password is too weak. Please choose a different combination');
+      }
+
+      // Attempt backend signup
+      const result = await signup({ username, password });
+
+      // Set user session from backend response
+      setUser({
+        id: result.user.id,
+        username: result.user.username,
+        role: result.user.role,
+        avatar: result.user.avatar || undefined,
+      });
+
+      toast.success(`Congratulations ${username}! Welcome. Make sure you record true sales.`, {
+        duration: 5000,
+      });
+      navigate('/dashboard');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Signup failed';
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateAvatar = async (avatarFile: File) => {
+    try {
+      setLoading(true);
+      const avatarData = await saveUserAvatar(avatarFile);
+
+      // Update user state with new avatar
+      if (user) {
+        setUser({
+          ...user,
+          avatar: avatarData,
+        });
+      }
+
+      toast.success('Avatar updated successfully!');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update avatar';
       toast.error(message);
       throw error;
     } finally {
@@ -113,6 +168,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     signIn,
     signUp,
+    updateAvatar,
     signOut,
     isAuthenticated: isAuthenticated(),
   };
