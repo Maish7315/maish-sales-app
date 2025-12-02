@@ -41,19 +41,8 @@ const Settings = () => {
   }, []);
 
   const loadProfile = async () => {
-    // Profile loading disabled - backend integration needed
-    // try {
-    //   const { data, error } = await supabase
-    //     .from('profiles')
-    //     .select('full_name')
-    //     .eq('id', user?.id)
-    //     .single();
-
-    //   if (error) throw error;
-    //   setFullName(data.full_name);
-    // } catch (error: any) {
-    //   toast.error('Failed to load profile');
-    // }
+    // Profile loading - front-end only, no backend needed
+    // Currently not implemented - could load from localStorage if needed
   };
 
   const loadAvatar = () => {
@@ -120,21 +109,8 @@ const Settings = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Profile update disabled - backend integration needed
-    // try {
-    //   const { error } = await supabase
-    //     .from('profiles')
-    //     .update({ full_name: fullName.trim() })
-    //     .eq('id', user?.id);
-
-    //   if (error) throw error;
-    //   toast.success('Profile updated successfully');
-    // } catch (error: any) {
-    //   toast.error(error.message || 'Failed to update profile');
-    // } finally {
-    //   setLoading(false);
-    // }
-    toast.info('Profile update not available - backend integration required');
+    // Profile update - front-end only, could save to localStorage if needed
+    toast.info('Profile update not implemented - front-end only');
     setLoading(false);
   };
 
@@ -153,23 +129,8 @@ const Settings = () => {
 
     setLoading(true);
 
-    // Password change disabled - backend integration needed
-    // try {
-    //   const { error } = await supabase.auth.updateUser({
-    //     password: newPassword,
-    //   });
-
-    //   if (error) throw error;
-
-    //   toast.success('Password changed successfully');
-    //   setNewPassword('');
-    //   setConfirmPassword('');
-    // } catch (error: any) {
-    //   toast.error(error.message || 'Failed to change password');
-    // } finally {
-    //   setLoading(false);
-    // }
-    toast.info('Password change not available - backend integration required');
+    // Password change - front-end only, could update localStorage credentials if needed
+    toast.info('Password change not implemented - front-end only');
     setLoading(false);
   };
 

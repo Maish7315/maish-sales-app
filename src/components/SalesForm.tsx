@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { saveSaleLocally, createSale } from '@/services/api';
+import { saveSaleLocally } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { ImageCropper } from './ImageCropper';
 const saleSchema = z.object({
   itemName: z.string().trim().min(1, { message: 'Item name is required' }).max(200),
   amount: z.number().positive({ message: 'Amount must be greater than 0' }),
+  receiptFile: z.instanceof(File, { message: 'Receipt image is required for evidence' }),
 });
 
 interface SalesFormProps {
@@ -74,10 +75,16 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
       return;
     }
 
+    if (!receiptFile) {
+      toast.error('Receipt image is required for evidence of the sale');
+      return;
+    }
+
     try {
       const validated = saleSchema.parse({
         itemName: itemName.trim(),
         amount: parseFloat(amount),
+        receiptFile: receiptFile,
       });
 
       // Calculate commission (2%)
@@ -85,10 +92,10 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
 
       setLoading(true);
 
-      await createSale({
-        item_description: validated.itemName,
-        amount: validated.amount,
-      }, receiptFile);
+      await saveSaleLocally({
+        itemName: validated.itemName,
+        amount: validated.amount.toString(),
+      }, receiptFile, user?.username || '');
       toast.success(`Sale recorded successfully! Commission: KES ${commission.toFixed(2)}`);
 
       toast.success(`Sale recorded! Commission: KES ${commission.toFixed(2)}`);
@@ -117,7 +124,7 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="itemName">Item Name / Description</Label>
+        <Label htmlFor="itemName">Item Name / Description <span className="text-red-500">*</span></Label>
         <Input
           id="itemName"
           type="text"
@@ -130,7 +137,7 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="amount">Sale Amount (KES)</Label>
+        <Label htmlFor="amount">Sale Amount (KES) <span className="text-red-500">*</span></Label>
         <Input
           id="amount"
           type="number"
@@ -152,7 +159,7 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="receipt">Receipt Image (Optional)</Label>
+        <Label htmlFor="receipt">Receipt Image <span className="text-red-500">*</span></Label>
         <div className="flex gap-2">
           <Input
             id="receipt"

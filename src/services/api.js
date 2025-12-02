@@ -1,13 +1,14 @@
-const API_BASE_URL = import.meta.env.DEV ? (import.meta.env.VITE_API_URL || 'http://localhost:3000') : '';
-
-// Local storage utilities for development
-const SALES_STORAGE_KEY = 'maish_sales_data';
+// Local storage utilities for front-end only
 const USER_AVATAR_KEY = 'maish_user_avatar';
 const USER_CREDENTIALS_KEY = 'maish_user_credentials';
 
-export const saveSaleLocally = async (saleData, receiptFile) => {
+// User-specific keys
+const getUserSalesKey = (username) => `maish_sales_data_${username}`;
+const getUserAvatarKey = (username) => `maish_user_avatar_${username}`;
+
+export const saveSaleLocally = async (saleData, receiptFile, username) => {
   try {
-    const sales = getSalesFromStorage();
+    const sales = getSalesFromStorage(username);
 
     // Convert image to base64 if present
     let imageData = null;
@@ -28,7 +29,7 @@ export const saveSaleLocally = async (saleData, receiptFile) => {
     };
 
     sales.push(newSale);
-    localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(sales));
+    localStorage.setItem(getUserSalesKey(username), JSON.stringify(sales));
 
     return newSale;
   } catch (error) {
@@ -36,9 +37,9 @@ export const saveSaleLocally = async (saleData, receiptFile) => {
   }
 };
 
-export const getSalesFromStorage = () => {
+export const getSalesFromStorage = (username) => {
   try {
-    const stored = localStorage.getItem(SALES_STORAGE_KEY);
+    const stored = localStorage.getItem(getUserSalesKey(username));
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
     console.error('Error loading sales from storage:', error);
@@ -46,9 +47,9 @@ export const getSalesFromStorage = () => {
   }
 };
 
-export const cleanupOldSales = () => {
+export const cleanupOldSales = (username) => {
   try {
-    const sales = getSalesFromStorage();
+    const sales = getSalesFromStorage(username);
     const cutoffTime = Date.now() - (48 * 60 * 60 * 1000); // 48 hours ago
 
     const filteredSales = sales.filter(sale => {
@@ -57,8 +58,8 @@ export const cleanupOldSales = () => {
     });
 
     if (filteredSales.length !== sales.length) {
-      localStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(filteredSales));
-      console.log(`Cleaned up ${sales.length - filteredSales.length} old sales`);
+      localStorage.setItem(getUserSalesKey(username), JSON.stringify(filteredSales));
+      console.log(`Cleaned up ${sales.length - filteredSales.length} old sales for ${username}`);
     }
   } catch (error) {
     console.error('Error cleaning up old sales:', error);
@@ -74,82 +75,29 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Sync local sales to backend when available
-export const syncLocalSalesToBackend = async () => {
-  try {
-    const localSales = getSalesFromStorage();
-    if (localSales.length === 0) return;
-
-    console.log(`Attempting to sync ${localSales.length} local sales to backend...`);
-
-    for (const sale of localSales) {
-      try {
-        // Convert base64 back to blob for upload
-        let receiptFile = null;
-        if (sale.photo_path && sale.photo_path.startsWith('data:image/')) {
-          receiptFile = await base64ToFile(sale.photo_path, `receipt-${sale.id}.jpg`);
-        }
-
-        // Upload to backend
-        await createSale({
-          itemName: sale.item_description,
-          amount: (sale.amount_cents / 100).toString(),
-        }, receiptFile);
-
-        console.log(`Synced sale: ${sale.item_description}`);
-      } catch (error) {
-        console.error(`Failed to sync sale ${sale.id}:`, error);
-        // Continue with other sales even if one fails
-      }
-    }
-
-    // Clear local storage after successful sync
-    localStorage.removeItem(SALES_STORAGE_KEY);
-    console.log('Local sales synced and cleared from storage');
-
-  } catch (error) {
-    console.error('Error syncing sales to backend:', error);
-    throw error;
-  }
-};
-
-const base64ToFile = (base64String, filename) => {
-  return new Promise((resolve) => {
-    const arr = base64String.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    resolve(new File([u8arr], filename, { type: mime }));
-  });
-};
-
 // Avatar management functions
-export const saveUserAvatar = async (avatarFile) => {
+export const saveUserAvatar = async (avatarFile, username) => {
   try {
     const avatarData = await fileToBase64(avatarFile);
-    localStorage.setItem(USER_AVATAR_KEY, avatarData);
+    localStorage.setItem(getUserAvatarKey(username), avatarData);
     return avatarData;
   } catch (error) {
     throw new Error('Failed to save avatar');
   }
 };
 
-export const getUserAvatar = () => {
+export const getUserAvatar = (username) => {
   try {
-    return localStorage.getItem(USER_AVATAR_KEY);
+    return localStorage.getItem(getUserAvatarKey(username));
   } catch (error) {
     console.error('Error loading avatar:', error);
     return null;
   }
 };
 
-export const removeUserAvatar = () => {
+export const removeUserAvatar = (username) => {
   try {
-    localStorage.removeItem(USER_AVATAR_KEY);
+    localStorage.removeItem(getUserAvatarKey(username));
   } catch (error) {
     console.error('Error removing avatar:', error);
   }
@@ -189,145 +137,44 @@ export const isWeakPassword = (password) => {
   return weakPasswords.includes(password);
 };
 
-// Helper function to get auth token
-const getAuthToken = () => localStorage.getItem('token');
-
-// Helper function to handle API responses
-const handleResponse = async (response) => {
-  console.log('API Response:', response.status, response.statusText, response.url);
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      // Token expired or invalid, clear it and redirect to login
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-      throw new Error('Authentication required');
-    }
-
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-    try {
-      const errorData = await response.json();
-      console.log('Error response data:', errorData);
-      errorMessage = errorData.error || errorData.message || errorMessage;
-    } catch (e) {
-      console.log('Could not parse error response:', e);
-      const text = await response.text().catch(() => '');
-      if (text) {
-        console.log('Error response text:', text);
-        errorMessage = text;
-      }
-    }
-
-    throw new Error(errorMessage);
-  }
-
-  return response.json();
-};
-
-// Helper function to make authenticated requests
-const authRequest = (url, options = {}) => {
-  const token = getAuthToken();
-  const headers = {
-    ...options.headers,
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  return fetch(`${API_BASE_URL}/api${url}`, {
-    ...options,
-    headers,
-  }).then(handleResponse);
-};
-
-// API functions
+// Mock authentication functions for front-end only
 export const signup = async (data) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await handleResponse(response);
-
-    if (result.token) {
-      localStorage.setItem('token', result.token);
-    }
-
-    return result;
-  } catch (error) {
-    throw error;
-  }
+  // Mock signup - don't save credentials persistently
+  return { success: true, message: 'Account created successfully' };
 };
 
 export const login = async (data) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const result = await handleResponse(response);
-
-    if (result.token) {
-      localStorage.setItem('token', result.token);
-    }
-
-    return result;
-  } catch (error) {
-    throw error;
+  // Mock login - just validate format, don't check stored credentials
+  if (!/^\d+$/.test(data.password)) {
+    throw new Error('Password must contain only numbers');
   }
+  // For front-end only, accept any valid format
+  return { success: true, message: 'Login successful' };
 };
 
 export const createSale = async (saleData, receiptFile) => {
-  try {
-    const formData = new FormData();
-    formData.append('item_description', saleData.item_description || saleData.itemName);
-    formData.append('amount', saleData.amount);
-
-    if (receiptFile) {
-      formData.append('receipt', receiptFile);
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/sales/createSale`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${getAuthToken()}`,
-      },
-      body: formData,
-    });
-
-    return await handleResponse(response);
-  } catch (error) {
-    throw error;
-  }
+  return await saveSaleLocally(saleData, receiptFile);
 };
 
-export const getSales = async () => {
-  try {
-    return await authRequest('/sales/getSales');
-  } catch (error) {
-    throw error;
-  }
+export const getSales = async (username) => {
+  // Return sales from local storage for the user
+  return getSalesFromStorage(username);
 };
 
 export const checkHealth = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/health`);
-    return await handleResponse(response);
-  } catch (error) {
-    throw error;
-  }
+  // Mock health check - always healthy for front-end only
+  return { status: 'healthy', message: 'Front-end only mode' };
 };
 
 // Logout function
 export const logout = () => {
+  // Only clear session data, keep user data for persistence
   localStorage.removeItem('token');
-  window.location.href = '/login';
+  // Don't clear sales data, avatars, or credentials - they should persist
+  // Don't redirect here, let AuthContext handle it
 };
 
-// Check if user is authenticated
+// Check if user is authenticated (not used anymore, AuthContext handles this)
 export const isAuthenticated = () => {
-  return !!getAuthToken();
+  return false; // Always false since we don't persist auth
 };

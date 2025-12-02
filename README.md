@@ -4,12 +4,11 @@ A React-based sales management application converted to cross-platform desktop a
 
 ## Features
 
-- User authentication (signup/login)
-- Sales creation and management
-- JWT authentication
-- File uploads (receipts)
+- User authentication (signup/login with local storage)
+- Sales creation and management (stored locally)
+- File uploads (receipts stored locally)
 - Responsive design
-- Offline sync capabilities
+- Front-end only application
 
 ## Project Structure
 
@@ -17,11 +16,10 @@ A React-based sales management application converted to cross-platform desktop a
 - `electron/` - Electron desktop app configuration
 - `resources/` - Mobile app icons and splash screens
 - `capacitor.config.ts` - Capacitor configuration
-- `backend/` - Backend API (separate project)
 
-## Backend
+## Architecture
 
-The app connects to a backend API at `https://maish-sale-backend-k5ur.vercel.app/`.
+This is a front-end only application that stores all data locally in the browser's localStorage.
 
 ## Development
 
@@ -40,14 +38,7 @@ npm install
 
 ### Environment Variables
 
-Create a `.env` file in the root directory:
-
-```env
-VITE_SUPABASE_PROJECT_ID=your_supabase_project_id
-VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key
-VITE_SUPABASE_URL=your_supabase_url
-VITE_API_BASE_URL=https://maish-sale-backend-k5ur.vercel.app
-```
+No environment variables are required for this front-end only application. All data is stored locally.
 
 ## Building and Running
 
@@ -66,11 +57,6 @@ The app is configured for easy Netlify deployment:
 1. Connect your GitHub repository to Netlify
 2. Set build command: `npm run build`
 3. Set publish directory: `dist`
-4. Configure environment variables in Netlify dashboard:
-   - `VITE_SUPABASE_PROJECT_ID`
-   - `VITE_SUPABASE_PUBLISHABLE_KEY`
-   - `VITE_SUPABASE_URL`
-   - `VITE_API_BASE_URL=https://maish-sale-backend-k5ur.vercel.app`
 
 The `netlify.toml` and `public/_redirects` files handle SPA routing automatically.
 

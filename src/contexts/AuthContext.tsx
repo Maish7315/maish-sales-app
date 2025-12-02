@@ -28,27 +28,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Auto sign-out when user leaves the app
+    const handleBeforeUnload = () => {
+      signOut();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // User switched tabs or minimized - sign out after a delay
+        setTimeout(() => {
+          if (document.visibilityState === 'hidden') {
+            signOut();
+          }
+        }, 30000); // 30 seconds delay
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Check if user is already authenticated on app load
     const checkAuth = () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          // Decode token to get user info (simple decode, not full JWT verification)
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          setUser({
-            id: payload.id,
-            username: payload.username,
-            role: payload.role,
-          });
-        } catch (error) {
-          // Invalid token, clear it
-          localStorage.removeItem('token');
-        }
+      const credentials = getUserCredentials();
+      if (credentials) {
+        setUser({
+          id: 1,
+          username: credentials.username,
+          role: 'user',
+          avatar: getUserAvatar(credentials.username) || undefined,
+        });
       }
       setLoading(false);
     };
 
     checkAuth();
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const signIn = async (username: string, password: string) => {
@@ -60,15 +78,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error('Password must contain only numbers');
       }
 
-      // Attempt backend login
-      const result = await login({ username, password });
+      // Attempt login
+      await login({ username, password });
 
-      // Set user session from backend response
+      // Set user session and load persisted data
       setUser({
-        id: result.user.id,
-        username: result.user.username,
-        role: result.user.role,
-        avatar: result.user.avatar || undefined,
+        id: 1,
+        username: username,
+        role: 'user',
+        avatar: getUserAvatar(username) || undefined,
       });
 
       toast.success(`Welcome back ${username}! Make sure you record true sales.`, {
@@ -99,15 +117,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error('Password is too weak. Please choose a different combination');
       }
 
-      // Attempt backend signup
-      const result = await signup({ username, full_name: fullName, password });
+      // Attempt signup
+      await signup({ username, full_name: fullName, password });
 
-      // Set user session from backend response
+      // Set user session for front-end only
       setUser({
-        id: result.user.id,
-        username: result.user.username,
-        role: result.user.role,
-        avatar: result.user.avatar || undefined,
+        id: 1,
+        username: username,
+        role: 'user',
+        avatar: undefined,
       });
 
       toast.success(`Congratulations ${username}! Welcome. Make sure you record true sales.`, {
@@ -126,7 +144,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const updateAvatar = async (avatarFile: File) => {
     try {
       setLoading(true);
-      const avatarData = await saveUserAvatar(avatarFile);
+      const avatarData = await saveUserAvatar(avatarFile, user?.username || '');
 
       // Update user state with new avatar
       if (user) {
@@ -147,7 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = () => {
-    logout();
+    // Clear user session but keep data
     setUser(null);
     toast.success('Signed out successfully');
     navigate('/');
@@ -160,7 +178,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signUp,
     updateAvatar,
     signOut,
-    isAuthenticated: isAuthenticated(),
+    isAuthenticated: !!user,
   };
 
   return (
