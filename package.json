@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "main": "electron/main.js",
-  "homepage": "./",
+  "homepage": "/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
