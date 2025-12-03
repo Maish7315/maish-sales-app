@@ -7,7 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
+// Simple toast replacement
+const toast = {
+  success: (message: string, options?: unknown) => alert(`✅ ${message}`),
+  error: (message: string, options?: unknown) => alert(`❌ ${message}`),
+};
 import { Loader2, ArrowLeft, User, Lock, LogOut, Wifi, WifiOff, Camera, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ImageCropper } from '@/components/ImageCropper';

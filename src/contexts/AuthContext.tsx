@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import { login, signup, logout, isAuthenticated, getUserAvatar, saveUserAvatar, saveUserCredentials, getUserCredentials, validateUserCredentials, isWeakPassword } from '@/services/api';
+import { login, signup, logout, isAuthenticated, getUserAvatar, saveUserAvatar, saveUserCredentials, getUserCredentials, validateUserCredentials, isWeakPassword, resetPassword } from '@/services/api';
+
+// Simple toast replacement
+const toast = {
+  success: (message: string, options?: unknown) => alert(`✅ ${message}`),
+  error: (message: string, options?: unknown) => alert(`❌ ${message}`),
+};
 
 interface User {
   id: number;
@@ -14,7 +19,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (username: string, password: string) => Promise<void>;
-  signUp: (username: string, fullName: string, password: string) => Promise<void>;
+  signUp: (username: string, fullName: string, password: string, idNumber: string) => Promise<void>;
   updateAvatar: (avatarFile: File) => Promise<void>;
   signOut: () => void;
   isAuthenticated: boolean;
@@ -103,7 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (username: string, fullName: string, password: string) => {
+  const signUp = async (username: string, fullName: string, password: string, idNumber: string) => {
     try {
       setLoading(true);
 
@@ -117,21 +122,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error('Password is too weak. Please choose a different combination');
       }
 
+      // Validate ID number
+      if (!idNumber || idNumber.trim().length < 5) {
+        throw new Error('ID number must be at least 5 characters');
+      }
+
       // Attempt signup
-      await signup({ username, full_name: fullName, password });
+      await signup({ username, full_name: fullName, password, idNumber });
 
-      // Set user session for front-end only
-      setUser({
-        id: 1,
-        username: username,
-        role: 'user',
-        avatar: undefined,
-      });
-
-      toast.success(`Congratulations ${username}! Welcome. Make sure you record true sales.`, {
+      toast.success(`Account created successfully! Please sign in with your credentials.`, {
         duration: 5000,
       });
-      navigate('/dashboard');
+      navigate('/login');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Signup failed';
       toast.error(message);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getSalesFromStorage, cleanupOldSales, getSales } from '@/services/api';
+import { getSalesFromStorage, cleanupOldSales, getSales, replaceUserSales } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,11 @@ import { InstallButton } from '@/components/InstallButton';
 import { WhatsAppButton } from '@/components/WhatsAppButton';
 // import { WeeklyCleanupDialog } from '@/components/WeeklyCleanupDialog';
 // import { useWeeklyDataCleanup } from '@/hooks/useWeeklyDataCleanup';
-import { toast } from 'sonner';
+// Simple toast replacement
+const toast = {
+  success: (message: string, options?: unknown) => alert(`✅ ${message}`),
+  error: (message: string, options?: unknown) => alert(`❌ ${message}`),
+};
 import loggo from '../loggo.png';
 
 interface Sale {
@@ -92,8 +96,8 @@ const Dashboard = () => {
         return saleDate < start || saleDate > end;
       });
 
-      // Update localStorage with filtered sales
-      localStorage.setItem(`maish_sales_data_${user.username}`, JSON.stringify(filteredSales));
+      // Update IndexedDB with filtered sales
+      await replaceUserSales(user.username, filteredSales);
 
       toast.success(`Sales data deleted for the selected date range`);
       loadSales(); // Refresh the sales list

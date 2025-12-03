@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { DollarSign, Calendar, Image as ImageIcon } from 'lucide-react';
+import { DollarSign, Calendar, Image as ImageIcon, X, MessageCircle } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Sale {
   id: number;
@@ -25,6 +26,68 @@ interface SalesListProps {
 
 export const SalesList = ({ sales }: SalesListProps) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  const generateSalesReport = () => {
+    if (!user || !sales.length) {
+      return `*Sales Report - ${user?.username || 'User'}*\n\nNo sales recorded.`;
+    }
+
+    let report = `*Sales Report - ${user.username}*\n\n`;
+    report += `📊 *Summary:*\n`;
+    report += `• Total Sales: ${sales.length}\n`;
+    report += `• Total Amount: KES ${sales.reduce((sum, sale) => sum + (sale.amount_cents / 100), 0).toFixed(2)}\n`;
+    report += `• Total Commission: KES ${sales.reduce((sum, sale) => sum + (sale.commission_cents / 100), 0).toFixed(2)}\n\n`;
+
+    report += `*📝 Sales Details:*\n`;
+    sales.forEach((sale, index) => {
+      const time = new Date(sale.created_at).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const date = format(new Date(sale.created_at), 'MMM dd');
+      report += `${index + 1}. *${sale.item_description}*\n`;
+      report += `   💰 Amount: KES ${(sale.amount_cents / 100).toFixed(2)}\n`;
+      report += `   📈 Commission: KES ${(sale.commission_cents / 100).toFixed(2)}\n`;
+      report += `   📅 Date/Time: ${date} ${time}\n`;
+      if (sale.photo_path) {
+        report += `   📷 Receipt Image: Available (please attach)\n`;
+      }
+      report += `\n`;
+    });
+
+    const salesWithImages = sales.filter(sale => sale.photo_path).length;
+    if (salesWithImages > 0) {
+      report += `*🖼️ Receipt Images:*\n`;
+      report += `Please attach ${salesWithImages} receipt image(s) with this message.\n`;
+      report += `Images have been downloaded to your device for easy attachment.\n\n`;
+    }
+
+    report += `*📱 Sent from Maish Boutique Sales Tracker*`;
+
+    return report;
+  };
+
+  const downloadReceiptImages = () => {
+    sales.forEach((sale, index) => {
+      if (sale.photo_path) {
+        const link = document.createElement('a');
+        link.href = sale.photo_path;
+        link.download = `receipt_${index + 1}_${sale.item_description.replace(/\s+/g, '_')}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
+  };
+
+  const handleWhatsAppClick = () => {
+    downloadReceiptImages();
+    const phoneNumber = '254740297140';
+    const message = encodeURIComponent(generateSalesReport());
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   if (sales.length === 0) {
     return (
@@ -43,81 +106,153 @@ export const SalesList = ({ sales }: SalesListProps) => {
   }
 
   return (
-    <Card className="shadow-md">
-      <CardHeader>
-        <CardTitle>Sales History</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[500px] pr-4">
-          <div className="space-y-4">
-            {sales.map((sale) => (
-              <Card key={sale.id} className="border-2 hover:border-primary/50 transition-colors">
-                <CardContent className="pt-6">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-lg">{sale.item_description}</h4>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                        <Calendar className="h-3 w-3" />
-                        {format(new Date(sale.created_at), 'PPp')}
+    <>
+      <Card className="shadow-md">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Sales History</CardTitle>
+            <Button
+              onClick={handleWhatsAppClick}
+              className="bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              size="sm"
+              disabled={!sales.length}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              Send Data via WhatsApp
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[500px] pr-4">
+            <div className="space-y-4">
+              {sales.map((sale) => (
+                <Card key={sale.id} className="border-2 hover:border-primary/50 transition-colors">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-lg">{sale.item_description}</h4>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(sale.created_at), 'PPp')}
+                        </div>
+                      </div>
+                      {sale.photo_path && (
+                        <Badge variant="outline" className="gap-1">
+                          <ImageIcon className="h-3 w-3" />
+                          Receipt
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Sale Amount</p>
+                        <p className="text-xl font-bold text-primary">
+                          KES {(sale.amount_cents / 100).toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Commission (2%)</p>
+                        <p className="text-xl font-bold text-accent">
+                          KES {(sale.commission_cents / 100).toFixed(2)}
+                        </p>
                       </div>
                     </div>
+
                     {sale.photo_path && (
-                      <Badge variant="outline" className="gap-1">
-                        <ImageIcon className="h-3 w-3" />
-                        Receipt
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Sale Amount</p>
-                      <p className="text-xl font-bold text-primary">
-                        KES {(sale.amount_cents / 100).toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Commission (2%)</p>
-                      <p className="text-xl font-bold text-accent">
-                        KES {(sale.commission_cents / 100).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {sale.photo_path && (
-                    <div className="mt-4">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <button className="w-full">
+                      <div className="mt-4">
+                        <button 
+                          className="w-full group"
+                          onClick={() => setSelectedImage(sale.photo_path)}
+                        >
+                          <div className="relative overflow-hidden rounded-lg border">
                             <img
                               src={sale.photo_path}
                               alt="Receipt"
-                              className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                              className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105"
+                              loading="lazy"
                             />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-                          <div className="relative flex items-center justify-center min-h-[200px]">
-                            <img
-                              src={sale.photo_path}
-                              alt="Receipt - Full Size"
-                              className="max-w-full max-h-[85vh] object-contain"
-                              style={{ imageRendering: 'auto' }}
-                            />
-                            <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
-                              {sale.item_description}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
+                              <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                Click to view full size
+                              </span>
                             </div>
                           </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Full Screen Image Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+          <div className="relative max-w-5xl max-h-[95vh] w-full">
+            {/* Close Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute top-4 right-4 z-10 bg-black/50 border-white/20 text-white hover:bg-black/70"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+
+            {/* Header */}
+            <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent z-10 p-4">
+              <div className="flex items-center justify-between text-white">
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {sales.find(s => s.photo_path === selectedImage)?.item_description || 'Receipt'}
+                  </h3>
+                  <p className="text-sm opacity-90">
+                    {sales.find(s => s.photo_path === selectedImage) && 
+                      format(new Date(sales.find(s => s.photo_path === selectedImage)!.created_at), 'PPp')}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm opacity-90">Amount</p>
+                  <p className="font-bold text-lg">
+                    {sales.find(s => s.photo_path === selectedImage) && 
+                      `KES ${(sales.find(s => s.photo_path === selectedImage)!.amount_cents / 100).toFixed(2)}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Full Size Image */}
+            <div className="flex items-center justify-center min-h-[400px]">
+              <img
+                src={selectedImage}
+                alt="Receipt - Full Size"
+                className="max-w-full max-h-[85vh] object-contain"
+                style={{ 
+                  imageRendering: 'crisp-edges',
+                  filter: 'contrast(1.1) brightness(1.05)'
+                }}
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent z-10 p-4">
+              <div className="flex items-center justify-between text-white text-sm">
+                <span>
+                  Commission: {sales.find(s => s.photo_path === selectedImage) && 
+                    `KES ${(sales.find(s => s.photo_path === selectedImage)!.commission_cents / 100).toFixed(2)}`}
+                </span>
+                <span>
+                  Sale ID: #{sales.find(s => s.photo_path === selectedImage)?.id || 'N/A'}
+                </span>
+              </div>
+            </div>
           </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </>
   );
 };

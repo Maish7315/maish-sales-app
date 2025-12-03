@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
+// Simple toast replacement
+const toast = {
+  success: (message: string, options?: unknown) => alert(`✅ ${message}`),
+  error: (message: string, options?: unknown) => alert(`❌ ${message}`),
+};
 import { Loader2, Store } from 'lucide-react';
 import { z } from 'zod';
 import { isWeakPassword } from '@/services/api';
@@ -13,6 +17,7 @@ import { isWeakPassword } from '@/services/api';
 const signupSchema = z.object({
   username: z.string().trim().min(2, { message: 'Username must be at least 2 characters' }).max(100),
   fullName: z.string().trim().min(2, { message: 'Full name must be at least 2 characters' }).max(100),
+  idNumber: z.string().trim().min(5, { message: 'ID number must be at least 5 characters' }).max(20),
   password: z.string().regex(/^\d+$/, { message: 'Password must contain only numbers' }).min(4, { message: 'Password must be at least 4 digits' }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -26,6 +31,7 @@ const signupSchema = z.object({
 const Signup = () => {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
+  const [idNumber, setIdNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,13 +45,13 @@ const Signup = () => {
   }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+   e.preventDefault();
 
-    try {
-      const validated = signupSchema.parse({ username, fullName, password, confirmPassword });
-      setLoading(true);
+   try {
+     const validated = signupSchema.parse({ username, fullName, idNumber, password, confirmPassword });
+     setLoading(true);
 
-      await signUp(validated.username, validated.fullName, validated.password);
+     await signUp(validated.username, validated.fullName, validated.password, validated.idNumber);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
@@ -93,6 +99,19 @@ const Signup = () => {
                 onChange={(e) => setFullName(e.target.value)}
                 required
                 disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="idNumber">ID Number</Label>
+              <Input
+                id="idNumber"
+                type="text"
+                placeholder="123456789"
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value)}
+                required
+                disabled={loading}
+                minLength={5}
               />
             </div>
             <div className="space-y-2">

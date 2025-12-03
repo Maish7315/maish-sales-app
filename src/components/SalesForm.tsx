@@ -4,7 +4,11 @@ import { saveSaleLocally } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+// Simple toast replacement
+const toast = {
+  success: (message: string, options?: unknown) => alert(`✅ ${message}`),
+  error: (message: string, options?: unknown) => alert(`❌ ${message}`),
+};
 import { Loader2, Upload } from 'lucide-react';
 import { z } from 'zod';
 import { ImageCropper } from './ImageCropper';

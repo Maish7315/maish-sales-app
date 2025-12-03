@@ -5,9 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
-import { Loader2, Store } from 'lucide-react';
+
+// Simple toast replacement
+const toast = {
+  success: (message: string, options?: unknown) => alert(`✅ ${message}`),
+  error: (message: string, options?: unknown) => alert(`❌ ${message}`),
+};
+import { Loader2, Store, HelpCircle } from 'lucide-react';
 import { z } from 'zod';
+import { resetPassword } from '@/services/api';
 
 const loginSchema = z.object({
   username: z.string().trim().min(2, { message: 'Username must be at least 2 characters' }).max(100),
@@ -18,6 +24,11 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResetForm, setShowResetForm] = useState(false);
+  const [resetIdNumber, setResetIdNumber] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
 
@@ -43,6 +54,42 @@ const Login = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      if (!/^\d+$/.test(newPassword)) {
+        toast.error('New password must contain only numbers');
+        return;
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        toast.error('New passwords do not match');
+        return;
+      }
+
+      if (newPassword.length < 4) {
+        toast.error('New password must be at least 4 digits');
+        return;
+      }
+
+      setResetLoading(true);
+      await resetPassword(resetIdNumber, newPassword);
+      
+      toast.success('Password reset successfully! Please sign in with your new password.');
+      setShowResetForm(false);
+      setResetIdNumber('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error) {
+      if (error instanceof Error) {
+        toast.error(error.message);
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -103,12 +150,104 @@ const Login = () => {
                 'Sign In'
               )}
             </Button>
-            <p className="text-sm text-center text-muted-foreground">
-              Don't have an account?{' '}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign up
-              </Link>
-            </p>
+            
+            <div className="flex flex-col gap-2 text-center">
+              {!showResetForm ? (
+                <Button 
+                  variant="link" 
+                  className="text-sm text-muted-foreground hover:text-primary"
+                  disabled={loading}
+                  onClick={() => setShowResetForm(true)}
+                >
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Forgot your password?
+                </Button>
+              ) : (
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
+                  <h3 className="font-semibold text-center">Reset Password</h3>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Enter your ID number and create a new password
+                  </p>
+                  <form onSubmit={handlePasswordReset} className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="resetIdNumber">ID Number</Label>
+                      <Input
+                        id="resetIdNumber"
+                        type="text"
+                        placeholder="Enter your ID number"
+                        value={resetIdNumber}
+                        onChange={(e) => setResetIdNumber(e.target.value)}
+                        required
+                        disabled={resetLoading}
+                        minLength={5}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">New Password (Numbers Only)</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        placeholder="New password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        disabled={resetLoading}
+                        minLength={4}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+                      <Input
+                        id="confirmNewPassword"
+                        type="password"
+                        placeholder="Confirm new password"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        required
+                        disabled={resetLoading}
+                        minLength={4}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowResetForm(false)}
+                        disabled={resetLoading}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={resetLoading}
+                        className="flex-1 bg-gradient-primary hover:opacity-90"
+                      >
+                        {resetLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Resetting...
+                          </>
+                        ) : (
+                          'Reset Password'
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              
+              <p className="text-sm text-center text-muted-foreground">
+                Don't have an account?{' '}
+                <Link to="/signup" className="text-primary hover:underline font-medium">
+                  Sign up
+                </Link>
+              </p>
+            </div>
           </CardFooter>
         </form>
       </Card>

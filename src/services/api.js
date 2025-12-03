@@ -6,10 +6,75 @@ const USER_CREDENTIALS_KEY = 'maish_user_credentials';
 const getUserSalesKey = (username) => `maish_sales_data_${username}`;
 const getUserAvatarKey = (username) => `maish_user_avatar_${username}`;
 
+// IndexedDB utilities for sales data
+const DB_NAME = 'MaishSalesDB';
+const DB_VERSION = 1;
+const SALES_STORE = 'sales';
+
+const openDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(SALES_STORE)) {
+        db.createObjectStore(SALES_STORE, { keyPath: 'id' });
+      }
+    };
+  });
+};
+
+const saveSaleToDB = async (sale) => {
+  const db = await openDB();
+  const transaction = db.transaction([SALES_STORE], 'readwrite');
+  const store = transaction.objectStore(SALES_STORE);
+  store.put(sale);
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+};
+
+const getSalesFromDB = async (username) => {
+  const db = await openDB();
+  const transaction = db.transaction([SALES_STORE], 'readonly');
+  const store = transaction.objectStore(SALES_STORE);
+  const request = store.getAll();
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      const allSales = request.result;
+      const userSales = allSales.filter(sale => sale.username === username);
+      resolve(userSales);
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const replaceUserSalesInDB = async (username, sales) => {
+  const db = await openDB();
+  const transaction = db.transaction([SALES_STORE], 'readwrite');
+  const store = transaction.objectStore(SALES_STORE);
+
+  // Delete all sales for the user
+  const allRequest = store.getAll();
+  allRequest.onsuccess = () => {
+    const allSales = allRequest.result;
+    const userSales = allSales.filter(sale => sale.username === username);
+    userSales.forEach(sale => store.delete(sale.id));
+  };
+
+  // Add the new sales
+  sales.forEach(sale => store.put(sale));
+
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+};
+
 export const saveSaleLocally = async (saleData, receiptFile, username) => {
   try {
-    const sales = getSalesFromStorage(username);
-
     // Convert image to base64 if present
     let imageData = null;
     if (receiptFile) {
@@ -18,7 +83,7 @@ export const saveSaleLocally = async (saleData, receiptFile, username) => {
 
     const newSale = {
       id: Date.now(),
-      user_id: 1, // Mock user ID
+      username: username,
       item_description: saleData.itemName,
       amount_cents: Math.round(parseFloat(saleData.amount) * 100),
       commission_cents: Math.round(parseFloat(saleData.amount) * 100 * 0.02), // 2% commission
@@ -28,8 +93,7 @@ export const saveSaleLocally = async (saleData, receiptFile, username) => {
       created_at: new Date().toISOString(),
     };
 
-    sales.push(newSale);
-    localStorage.setItem(getUserSalesKey(username), JSON.stringify(sales));
+    await saveSaleToDB(newSale);
 
     return newSale;
   } catch (error) {
@@ -103,10 +167,20 @@ export const removeUserAvatar = (username) => {
   }
 };
 
+// Password hashing utility
+const hashPassword = async (password) => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 // User credentials management
-export const saveUserCredentials = (username, password) => {
+export const saveUserCredentials = async (username, password, idNumber) => {
   try {
-    const credentials = { username, password };
+    const hashedPassword = await hashPassword(password);
+    const credentials = { username, password: hashedPassword, idNumber };
     localStorage.setItem(USER_CREDENTIALS_KEY, JSON.stringify(credentials));
     return true;
   } catch (error) {
@@ -125,11 +199,14 @@ export const getUserCredentials = () => {
   }
 };
 
-export const validateUserCredentials = (username, password) => {
+export const validateUserCredentials = async (username, password) => {
   const credentials = getUserCredentials();
   if (!credentials) return false;
 
-  return credentials.username === username && credentials.password === password;
+  if (credentials.username !== username) return false;
+
+  const hashedPassword = await hashPassword(password);
+  return credentials.password === hashedPassword;
 };
 
 export const isWeakPassword = (password) => {
@@ -137,18 +214,56 @@ export const isWeakPassword = (password) => {
   return weakPasswords.includes(password);
 };
 
-// Mock authentication functions for front-end only
+export const resetPassword = async (idNumber, newPassword) => {
+  const credentials = getUserCredentials();
+  if (!credentials || credentials.idNumber !== idNumber) {
+    throw new Error('Invalid ID number');
+  }
+
+  // Update password
+  const success = await saveUserCredentials(credentials.username, newPassword, idNumber);
+  if (!success) {
+    throw new Error('Failed to reset password');
+  }
+
+  return { success: true, message: 'Password reset successfully' };
+};
+
+// Authentication functions
 export const signup = async (data) => {
-  // Mock signup - don't save credentials persistently
+  // Check if user already exists
+  const existingCredentials = getUserCredentials();
+  if (existingCredentials && existingCredentials.username === data.username) {
+    throw new Error('Username already exists');
+  }
+
+  // Save credentials with ID number
+  const success = await saveUserCredentials(data.username, data.password, data.idNumber);
+  if (!success) {
+    throw new Error('Failed to create account');
+  }
+
   return { success: true, message: 'Account created successfully' };
 };
 
 export const login = async (data) => {
-  // Mock login - just validate format, don't check stored credentials
+  // Validate password format
   if (!/^\d+$/.test(data.password)) {
     throw new Error('Password must contain only numbers');
   }
-  // For front-end only, accept any valid format
+
+  // Check if any user exists
+  const existingCredentials = getUserCredentials();
+  if (!existingCredentials) {
+    throw new Error('No account found. Please create an account first.');
+  }
+
+  // Validate credentials against stored data
+  const isValid = await validateUserCredentials(data.username, data.password);
+  if (!isValid) {
+    throw new Error('Invalid username or password');
+  }
+
   return { success: true, message: 'Login successful' };
 };
 
@@ -157,8 +272,12 @@ export const createSale = async (saleData, receiptFile) => {
 };
 
 export const getSales = async (username) => {
-  // Return sales from local storage for the user
-  return getSalesFromStorage(username);
+  // Return sales from IndexedDB for the user
+  return await getSalesFromDB(username);
+};
+
+export const replaceUserSales = async (username, sales) => {
+  return await replaceUserSalesInDB(username, sales);
 };
 
 export const checkHealth = async () => {

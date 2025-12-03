@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { RotateCw, Maximize2, Minimize2 } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
 
 interface ImageCropperProps {
@@ -22,6 +24,8 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
   const imgRef = useRef<HTMLImageElement>(null);
   const [imageSrc, setImageSrc] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [imageScale, setImageScale] = useState([100]);
+  const [rotation, setRotation] = useState(0);
 
   React.useEffect(() => {
     const reader = new FileReader();
@@ -42,9 +46,24 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
+    const scale = imageScale[0] / 100;
 
-    canvas.width = crop.width;
-    canvas.height = crop.height;
+    // Calculate final dimensions
+    const finalWidth = crop.width * scale;
+    const finalHeight = crop.height * scale;
+
+    canvas.width = finalWidth;
+    canvas.height = finalHeight;
+
+    // Apply transformations
+    ctx.save();
+    
+    // Apply rotation if needed
+    if (rotation !== 0) {
+      ctx.translate(finalWidth / 2, finalHeight / 2);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.translate(-finalWidth / 2, -finalHeight / 2);
+    }
 
     ctx.drawImage(
       image,
@@ -54,15 +73,17 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
       crop.height * scaleY,
       0,
       0,
-      crop.width,
-      crop.height
+      finalWidth,
+      finalHeight
     );
+
+    ctx.restore();
 
     return new Promise((resolve) => {
       canvas.toBlob((blob) => {
         if (!blob) throw new Error('Canvas is empty');
         resolve(blob);
-      }, 'image/jpeg', 0.8);
+      }, 'image/jpeg', 0.9); // Higher quality
     });
   };
 
@@ -94,35 +115,90 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
   };
 
   return (
-    <Dialog open={true} onOpenChange={() => {}}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Crop Image</DialogTitle>
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold mb-2">Crop Image</h2>
           <p className="text-sm text-muted-foreground">
             Crop the image to reduce file size. Final image must be under {maxSizeMB}MB.
           </p>
-        </DialogHeader>
+        </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Image Controls */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Image Scale</Label>
+              <div className="flex items-center gap-2">
+                <Minimize2 className="h-4 w-4 text-muted-foreground" />
+                <Slider
+                  value={imageScale}
+                  onValueChange={setImageScale}
+                  min={25}
+                  max={200}
+                  step={5}
+                  className="flex-1"
+                />
+                <Maximize2 className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground">{imageScale[0]}%</p>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Rotation</Label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRotation(prev => prev - 90)}
+                  disabled={loading}
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground min-w-[60px] text-center">
+                  {rotation}°
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRotation(prev => prev + 90)}
+                  disabled={loading}
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Crop Area */}
           {imageSrc && (
-            <ReactCrop
-              crop={crop}
-              onChange={setCrop}
-              onComplete={setCompletedCrop}
-              aspect={undefined}
-              minWidth={200}
-              minHeight={200}
-            >
-              <img
-                ref={imgRef}
-                src={imageSrc}
-                alt="Crop preview"
-                className="max-w-full max-h-96 object-contain"
-                style={{ maxHeight: '400px' }}
-              />
-            </ReactCrop>
+            <div className="border rounded-lg p-4 bg-muted/20">
+              <ReactCrop
+                crop={crop}
+                onChange={setCrop}
+                onComplete={setCompletedCrop}
+                aspect={undefined}
+                minWidth={200}
+                minHeight={200}
+              >
+                <img
+                  ref={imgRef}
+                  src={imageSrc}
+                  alt="Crop preview"
+                  className="max-w-full max-h-96 object-contain mx-auto"
+                  style={{ 
+                    maxHeight: '500px',
+                    transform: `scale(${imageScale[0] / 100}) rotate(${rotation}deg)`,
+                    transition: 'transform 0.2s ease'
+                  }}
+                />
+              </ReactCrop>
+            </div>
           )}
 
+          {/* Action Buttons */}
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={onCancel} disabled={loading}>
               Cancel
@@ -130,12 +206,13 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
             <Button
               onClick={handleCropComplete}
               disabled={!completedCrop || loading}
+              className="bg-gradient-primary hover:opacity-90"
             >
-              {loading ? 'Processing...' : 'Apply Crop'}
+              {loading ? 'Processing...' : 'Apply Crop & Resize'}
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 };
