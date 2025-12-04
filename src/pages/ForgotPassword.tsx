@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { sendPasswordResetOTP, verifyPasswordResetOTP } from '@/services/api';
+import { supabase } from '@/lib/supabase';
 import { Loader2, ArrowLeft, Phone, KeyRound } from 'lucide-react';
 import { z } from 'zod';
 
@@ -73,13 +73,27 @@ const ForgotPassword = () => {
       setLoading(true);
 
       toast.success('Verifying code...');
-      // For now, just move to password step - actual verification happens in final step
+
+      // Verify OTP with Supabase
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: phoneNumber,
+        token: validatedOtp.otp,
+        type: 'sms'
+      });
+
+      if (error) {
+        throw new Error('Invalid verification code. Please try again.');
+      }
+
+      toast.success('Code verified! Please set your new password.');
       setStep('password');
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
       } else {
-        toast.error('Invalid verification code');
+        toast.error('Verification failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -94,21 +108,32 @@ const ForgotPassword = () => {
       setLoading(true);
 
       toast.success('Resetting password...');
-      const result = await verifyPasswordResetOTP(phoneNumber, otp, validated.newPassword);
 
-      if (result.success) {
-        toast.success('Password reset successfully! Please sign in with your new password.');
-        setUsername(result.username);
-        // Redirect to login after a short delay
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
+      // Update password using Supabase Auth (user is now authenticated from OTP verification)
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: validated.newPassword
+      });
+
+      if (updateError) {
+        throw new Error('Failed to update password. Please try again.');
       }
+
+      // Sign out the temporary session
+      await supabase.auth.signOut();
+
+      toast.success('Password reset successfully! Please sign in with your new password.');
+
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else if (error instanceof Error) {
         toast.error(error.message);
+      } else {
+        toast.error('Password reset failed. Please try again.');
       }
     } finally {
       setLoading(false);
