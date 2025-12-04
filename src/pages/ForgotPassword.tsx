@@ -48,17 +48,25 @@ const ForgotPassword = () => {
       setLoading(true);
 
       toast.success('Sending verification code...');
-      const result = await sendPasswordResetOTP(validated.phoneNumber);
 
-      if (result.success) {
-        toast.success('Verification code sent! Please check your phone.');
-        setStep('otp');
+      // Send OTP using Supabase directly
+      const { data, error } = await supabase.auth.signInWithOtp({
+        phone: validated.phoneNumber,
+      });
+
+      if (error) {
+        throw new Error('Failed to send verification code. Please try again.');
       }
+
+      toast.success('Verification code sent! Please check your phone.');
+      setStep('otp');
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else if (error instanceof Error) {
         toast.error(error.message);
+      } else {
+        toast.error('Failed to send verification code. Please try again.');
       }
     } finally {
       setLoading(false);
