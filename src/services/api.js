@@ -317,26 +317,7 @@ export const createSale = async (saleData, receiptFile) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Upload image to Supabase Storage if present
-    let photoUrl = null;
-    if (receiptFile) {
-      const fileExt = receiptFile.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('receipts')
-        .upload(fileName, receiptFile);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(fileName);
-
-      photoUrl = publicUrl;
-    }
-
-    // Create sale record
+    // Create sale record first (without image for faster response)
     const { data, error } = await supabase
       .from('sales')
       .insert({
@@ -344,13 +325,48 @@ export const createSale = async (saleData, receiptFile) => {
         item_description: saleData.itemName,
         amount_cents: Math.round(parseFloat(saleData.amount) * 100),
         commission_cents: Math.round(parseFloat(saleData.amount) * 100 * 0.02), // 2% commission
-        photo_url: photoUrl,
+        photo_url: null, // Will update after upload
         status: 'completed'
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Upload image asynchronously if present
+    let photoUrl = null;
+    if (receiptFile) {
+      try {
+        const fileExt = receiptFile.name.split('.').pop();
+        const fileName = `${user.id}/${data.id}.${fileExt}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('receipts')
+          .upload(fileName, receiptFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.warn('Image upload failed, sale recorded without image:', uploadError);
+        } else {
+          const { data: { publicUrl } } = supabase.storage
+            .from('receipts')
+            .getPublicUrl(fileName);
+
+          photoUrl = publicUrl;
+
+          // Update the sale record with the image URL
+          await supabase
+            .from('sales')
+            .update({ photo_url: photoUrl })
+            .eq('id', data.id);
+        }
+      } catch (uploadError) {
+        console.warn('Image upload failed, sale recorded without image:', uploadError);
+        // Don't throw error - sale is still recorded
+      }
+    }
 
     return {
       id: data.id,
@@ -359,7 +375,7 @@ export const createSale = async (saleData, receiptFile) => {
       amount_cents: data.amount_cents,
       commission_cents: data.commission_cents,
       timestamp: data.timestamp,
-      photo_path: data.photo_url,
+      photo_path: photoUrl,
       status: data.status,
       created_at: data.created_at,
     };

@@ -72,25 +72,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!mounted) return;
 
         if (session?.user) {
-          // User is signed in - fetch profile
-          try {
-            const { data: profile, error } = await supabase
-              .from('profiles')
-              .select('username, avatar_url')
-              .eq('id', session.user.id)
-              .single();
+          // User is signed in - fetch profile with retry logic
+          let retries = 0;
+          const maxRetries = 5;
 
-            if (profile && !error && mounted) {
-              setUser({
-                id: session.user.id,
-                username: profile.username,
-                role: 'user',
-                avatar: profile.avatar_url || undefined,
-              });
+          const fetchProfile = async () => {
+            try {
+              const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('username, avatar_url')
+                .eq('id', session.user.id)
+                .single();
+
+              if (profile && !error && mounted) {
+                setUser({
+                  id: session.user.id,
+                  username: profile.username,
+                  role: 'user',
+                  avatar: profile.avatar_url || undefined,
+                });
+                return true; // Success
+              } else if (retries < maxRetries) {
+                // Profile not ready yet, retry after delay
+                retries++;
+                setTimeout(fetchProfile, 1000 * retries); // Exponential backoff
+                return false;
+              } else {
+                console.error('Profile fetch failed after retries:', error);
+                // Set user with basic info if profile fetch fails
+                if (mounted) {
+                  setUser({
+                    id: session.user.id,
+                    username: session.user.user_metadata?.username || 'User',
+                    role: 'user',
+                    avatar: undefined,
+                  });
+                }
+                return false;
+              }
+            } catch (error) {
+              console.error('Profile fetch error:', error);
+              if (retries < maxRetries) {
+                retries++;
+                setTimeout(fetchProfile, 1000 * retries);
+                return false;
+              }
+              return false;
             }
-          } catch (error) {
-            console.error('Profile fetch error:', error);
-          }
+          };
+
+          fetchProfile();
         } else {
           // User is signed out
           setUser(null);

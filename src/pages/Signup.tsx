@@ -51,12 +51,16 @@ const Signup = () => {
       const validated = signupSchema.parse({ username, fullName, phoneNumber, password, confirmPassword });
       setLoading(true);
 
+      toast.success('Creating your account...');
       await signUp(validated.username, validated.fullName, validated.password, validated.phoneNumber);
+      toast.success('Account created! Redirecting to login...');
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else if (error instanceof Error) {
         toast.error(error.message);
+      } else {
+        toast.error('Failed to create account');
       }
     } finally {
       setLoading(false);
