@@ -145,11 +145,60 @@ const fileToBase64 = (file) => {
 // Avatar management functions
 export const saveUserAvatar = async (avatarFile, username) => {
   try {
-    // Temporarily disabled - storage policies need setup
-    console.log('Avatar upload temporarily disabled - needs storage policy setup');
-    throw new Error('Avatar upload temporarily disabled. Core features working.');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Delete existing avatar first (if any)
+    try {
+      const { data: existingFiles } = await supabase.storage
+        .from('avatars')
+        .list(user.id);
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(file => `${user.id}/${file.name}`);
+        await supabase.storage
+          .from('avatars')
+          .remove(filesToDelete);
+      }
+    } catch (deleteError) {
+      console.warn('Failed to delete old avatar:', deleteError);
+      // Continue with upload even if delete fails
+    }
+
+    // Upload new avatar to Supabase Storage
+    const fileExt = avatarFile.name.split('.').pop();
+    const fileName = `${user.id}/avatar.${fileExt}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(fileName, avatarFile, {
+        cacheControl: '3600',
+        upsert: true // Allow overwriting existing avatar
+      });
+
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(fileName);
+
+    // Update user profile with avatar URL
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', user.id);
+
+    if (updateError) {
+      throw new Error(`Profile update failed: ${updateError.message}`);
+    }
+
+    return publicUrl;
   } catch (error) {
-    throw new Error('Avatar upload not available yet');
+    console.error('Avatar upload error:', error);
+    throw error;
   }
 };
 
@@ -172,11 +221,37 @@ export const getUserAvatar = async (username) => {
   }
 };
 
-export const removeUserAvatar = (username) => {
+export const removeUserAvatar = async (username) => {
   try {
-    localStorage.removeItem(getUserAvatarKey(username));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Delete avatar from storage
+    const { data: existingFiles } = await supabase.storage
+      .from('avatars')
+      .list(user.id);
+
+    if (existingFiles && existingFiles.length > 0) {
+      const filesToDelete = existingFiles.map(file => `${user.id}/${file.name}`);
+      await supabase.storage
+        .from('avatars')
+        .remove(filesToDelete);
+    }
+
+    // Update profile to remove avatar URL
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: null })
+      .eq('id', user.id);
+
+    if (updateError) {
+      throw new Error(`Failed to remove avatar: ${updateError.message}`);
+    }
+
+    return true;
   } catch (error) {
     console.error('Error removing avatar:', error);
+    throw error;
   }
 };
 

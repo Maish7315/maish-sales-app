@@ -34,7 +34,7 @@ interface Sale {
 }
 
 const Dashboard = () => {
-  const { user, signOut, updateAvatar } = useAuth();
+  const { user, signOut, updateAvatar, removeAvatar } = useAuth();
   const navigate = useNavigate();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -320,6 +320,27 @@ const Dashboard = () => {
                       </p>
                       {uploadingAvatar && (
                         <p className="text-sm text-primary">Uploading...</p>
+                      )}
+                      {user?.avatar && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              setUploadingAvatar(true);
+                              await removeAvatar();
+                            } catch (error) {
+                              // Error already handled in removeAvatar
+                            } finally {
+                              setUploadingAvatar(false);
+                            }
+                          }}
+                          disabled={uploadingAvatar}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          Remove Avatar
+                        </Button>
                       )}
                     </div>
                   </div>

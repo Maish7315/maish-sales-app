@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login, signup, logout, getUserAvatar, saveUserAvatar, isWeakPassword } from '@/services/api';
+import { login, signup, logout, getUserAvatar, saveUserAvatar, removeUserAvatar, isWeakPassword } from '@/services/api';
 import { supabase } from '@/lib/supabase';
 
 // Simple toast replacement
@@ -22,6 +22,7 @@ interface AuthContextType {
   signIn: (username: string, password: string) => Promise<void>;
   signUp: (username: string, fullName: string, password: string, phoneNumber: string) => Promise<void>;
   updateAvatar: (avatarFile: File) => Promise<void>;
+  removeAvatar: () => Promise<void>;
   signOut: () => void;
   isAuthenticated: boolean;
 }
@@ -180,7 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateAvatar = async (avatarFile: File) => {
     try {
-      setLoading(true);
+      // Don't set loading here as it's handled in Dashboard component
       const avatarData = await saveUserAvatar(avatarFile, user?.username || '');
 
       // Update user state with new avatar
@@ -192,12 +193,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       toast.success('Avatar updated successfully!');
+      return avatarData;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update avatar';
       toast.error(message);
       throw error;
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    try {
+      await removeUserAvatar(user?.username || '');
+
+      // Update user state to remove avatar
+      if (user) {
+        setUser({
+          ...user,
+          avatar: undefined,
+        });
+      }
+
+      toast.success('Avatar removed successfully!');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to remove avatar';
+      toast.error(message);
+      throw error;
     }
   };
 
@@ -221,6 +241,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signIn,
     signUp,
     updateAvatar,
+    removeAvatar,
     signOut,
     isAuthenticated: !!user,
   };
