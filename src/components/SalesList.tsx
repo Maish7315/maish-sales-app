@@ -28,19 +28,29 @@ export const SalesList = ({ sales }: SalesListProps) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const { user } = useAuth();
 
-  const generateSalesReport = () => {
-    if (!user || !sales.length) {
-      return `*Sales Report - ${user?.username || 'User'}*\n\nNo sales recorded.`;
+  const salesWithImages = sales.filter(sale => sale.photo_path).length;
+
+  const getTodaysSales = () => {
+    const today = new Date().toDateString();
+    return sales.filter(sale => new Date(sale.created_at).toDateString() === today);
+  };
+
+  const todaysSales = getTodaysSales();
+  const todaysSalesWithImages = todaysSales.filter(sale => sale.photo_path).length;
+
+  const generateSalesReport = (salesData = todaysSales) => {
+    if (!user || !salesData.length) {
+      return `*Daily Sales Report - ${user?.username || 'User'}*\n\nNo sales recorded today.`;
     }
 
-    let report = `*Sales Report - ${user.username}*\n\n`;
+    let report = `*Daily Sales Report - ${user.username}*\n\n`;
     report += `📊 *Summary:*\n`;
-    report += `• Total Sales: ${sales.length}\n`;
-    report += `• Total Amount: KES ${sales.reduce((sum, sale) => sum + (sale.amount_cents / 100), 0).toFixed(2)}\n`;
-    report += `• Total Commission: KES ${sales.reduce((sum, sale) => sum + (sale.commission_cents / 100), 0).toFixed(2)}\n\n`;
+    report += `• Total Sales: ${salesData.length}\n`;
+    report += `• Total Amount: KES ${salesData.reduce((sum, sale) => sum + (sale.amount_cents / 100), 0).toFixed(2)}\n`;
+    report += `• Total Commission: KES ${salesData.reduce((sum, sale) => sum + (sale.commission_cents / 100), 0).toFixed(2)}\n\n`;
 
     report += `*📝 Sales Details:*\n`;
-    sales.forEach((sale, index) => {
+    salesData.forEach((sale, index) => {
       const time = new Date(sale.created_at).toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit'
@@ -56,7 +66,7 @@ export const SalesList = ({ sales }: SalesListProps) => {
       report += `\n`;
     });
 
-    const salesWithImages = sales.filter(sale => sale.photo_path).length;
+    const salesWithImages = salesData.filter(sale => sale.photo_path).length;
     if (salesWithImages > 0) {
       report += `*🖼️ Receipt Images:*\n`;
       report += `Please attach ${salesWithImages} receipt image(s) with this message.\n`;
@@ -68,8 +78,8 @@ export const SalesList = ({ sales }: SalesListProps) => {
     return report;
   };
 
-  const downloadReceiptImages = () => {
-    sales.forEach((sale, index) => {
+  const downloadReceiptImages = (salesData = todaysSales) => {
+    salesData.forEach((sale, index) => {
       if (sale.photo_path) {
         const link = document.createElement('a');
         link.href = sale.photo_path;
@@ -82,9 +92,24 @@ export const SalesList = ({ sales }: SalesListProps) => {
   };
 
   const handleWhatsAppClick = () => {
-    downloadReceiptImages();
+    downloadReceiptImages(todaysSales);
     const phoneNumber = '254740297140';
-    const message = encodeURIComponent(generateSalesReport());
+    const message = encodeURIComponent(generateSalesReport(todaysSales));
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleImagesOnlyClick = () => {
+    downloadReceiptImages(todaysSales);
+    const phoneNumber = '254740297140';
+    const message = encodeURIComponent(`*Receipt Images - ${user?.username || 'User'}*\n\nHere are ${todaysSalesWithImages} receipt image(s) from today's sales.\n\n*📱 Sent from Maish Boutique Sales Tracker*`);
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleSummaryOnlyClick = () => {
+    const phoneNumber = '254740297140';
+    const message = encodeURIComponent(generateSalesReport(todaysSales));
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -109,17 +134,42 @@ export const SalesList = ({ sales }: SalesListProps) => {
     <>
       <Card className="shadow-md">
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-2">
             <CardTitle>Sales History</CardTitle>
-            <Button
-              onClick={handleWhatsAppClick}
-              className="bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-              size="sm"
-              disabled={!sales.length}
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              Send Data via WhatsApp
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleWhatsAppClick}
+                className="bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                size="sm"
+                disabled={!todaysSales.length}
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Send Today's Sales Report with Images
+              </Button>
+              <Button
+                onClick={handleImagesOnlyClick}
+                className="bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                size="sm"
+                disabled={!todaysSalesWithImages}
+              >
+                <ImageIcon className="mr-2 h-4 w-4" />
+                Send Today's Receipt Images Only
+              </Button>
+              <Button
+                onClick={handleSummaryOnlyClick}
+                className="bg-purple-500 hover:bg-purple-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                size="sm"
+                disabled={!todaysSales.length}
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Send Today's Sales Summary Only
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p><strong>Today's Sales Report with Images:</strong> Sends today's complete sales details with receipt images attached</p>
+              <p><strong>Today's Receipt Images Only:</strong> Sends only today's receipt images for sales with photos</p>
+              <p><strong>Today's Sales Summary Only:</strong> Sends today's sales summary text without images</p>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

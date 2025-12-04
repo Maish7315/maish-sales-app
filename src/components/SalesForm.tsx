@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { saveSaleLocally } from '@/services/api';
+import { createSale } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,10 +96,11 @@ export const SalesForm = ({ onSaleAdded }: SalesFormProps) => {
 
       setLoading(true);
 
-      await saveSaleLocally({
+      await createSale({
         itemName: validated.itemName,
         amount: validated.amount.toString(),
-      }, receiptFile, user?.username || '');
+        username: user?.username || '',
+      }, receiptFile);
       toast.success(`Sale recorded successfully! Commission: KES ${commission.toFixed(2)}`);
 
       toast.success(`Sale recorded! Commission: KES ${commission.toFixed(2)}`);

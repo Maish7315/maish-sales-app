@@ -1,4 +1,7 @@
-// Local storage utilities for front-end only
+// Supabase client
+import { supabase } from '@/lib/supabase';
+
+// Legacy local storage utilities (for migration)
 const USER_AVATAR_KEY = 'maish_user_avatar';
 const USER_CREDENTIALS_KEY = 'maish_user_credentials';
 
@@ -142,17 +145,27 @@ const fileToBase64 = (file) => {
 // Avatar management functions
 export const saveUserAvatar = async (avatarFile, username) => {
   try {
-    const avatarData = await fileToBase64(avatarFile);
-    localStorage.setItem(getUserAvatarKey(username), avatarData);
-    return avatarData;
+    // Temporarily disabled - storage policies need setup
+    console.log('Avatar upload temporarily disabled - needs storage policy setup');
+    throw new Error('Avatar upload temporarily disabled. Core features working.');
   } catch (error) {
-    throw new Error('Failed to save avatar');
+    throw new Error('Avatar upload not available yet');
   }
 };
 
-export const getUserAvatar = (username) => {
+export const getUserAvatar = async (username) => {
   try {
-    return localStorage.getItem(getUserAvatarKey(username));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', user.id)
+      .single();
+
+    if (error || !data) return null;
+    return data.avatar_url;
   } catch (error) {
     console.error('Error loading avatar:', error);
     return null;
@@ -229,55 +242,199 @@ export const resetPassword = async (idNumber, newPassword) => {
   return { success: true, message: 'Password reset successfully' };
 };
 
-// Authentication functions
+// Authentication functions using Supabase
 export const signup = async (data) => {
-  // Check if user already exists
-  const existingCredentials = getUserCredentials();
-  if (existingCredentials && existingCredentials.username === data.username) {
-    throw new Error('Username already exists');
-  }
+  try {
+    // Validate password format
+    if (!/^\d+$/.test(data.password)) {
+      throw new Error('Password must contain only numbers');
+    }
 
-  // Save credentials with ID number
-  const success = await saveUserCredentials(data.username, data.password, data.idNumber);
-  if (!success) {
-    throw new Error('Failed to create account');
-  }
+    // Check for weak passwords
+    if (isWeakPassword(data.password)) {
+      throw new Error('Password is too weak. Please choose a different combination');
+    }
 
-  return { success: true, message: 'Account created successfully' };
+    // Validate phone number
+    if (!data.phoneNumber || data.phoneNumber.trim().length < 10) {
+      throw new Error('Phone number must be at least 10 digits');
+    }
+
+    // Sign up with Supabase Auth using a valid email format
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: `${data.username}@maish.app`, // Use valid email domain
+      password: data.password,
+      options: {
+        data: {
+          username: data.username,
+          full_name: data.full_name,
+          phone_number: data.phoneNumber,
+        }
+      }
+    });
+
+    if (authError) {
+      if (authError.message.includes('already registered')) {
+        throw new Error('Username already exists');
+      }
+      throw new Error(authError.message);
+    }
+
+    return { success: true, message: 'Account created successfully' };
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const login = async (data) => {
-  // Validate password format
-  if (!/^\d+$/.test(data.password)) {
-    throw new Error('Password must contain only numbers');
-  }
+  try {
+    // Validate password format
+    if (!/^\d+$/.test(data.password)) {
+      throw new Error('Password must contain only numbers');
+    }
 
-  // Check if any user exists
-  const existingCredentials = getUserCredentials();
-  if (!existingCredentials) {
-    throw new Error('No account found. Please create an account first.');
-  }
+    // Sign in with Supabase Auth using email (username@maish.app)
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: `${data.username}@maish.app`,
+      password: data.password,
+    });
 
-  // Validate credentials against stored data
-  const isValid = await validateUserCredentials(data.username, data.password);
-  if (!isValid) {
-    throw new Error('Invalid username or password');
-  }
+    if (authError) {
+      if (authError.message.includes('Invalid login credentials')) {
+        throw new Error('Invalid username or password');
+      }
+      throw new Error(authError.message);
+    }
 
-  return { success: true, message: 'Login successful' };
+    return { success: true, message: 'Login successful' };
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const createSale = async (saleData, receiptFile) => {
-  return await saveSaleLocally(saleData, receiptFile);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Upload image to Supabase Storage if present
+    let photoUrl = null;
+    if (receiptFile) {
+      const fileExt = receiptFile.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(fileName, receiptFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(fileName);
+
+      photoUrl = publicUrl;
+    }
+
+    // Create sale record
+    const { data, error } = await supabase
+      .from('sales')
+      .insert({
+        user_id: user.id,
+        item_description: saleData.itemName,
+        amount_cents: Math.round(parseFloat(saleData.amount) * 100),
+        commission_cents: Math.round(parseFloat(saleData.amount) * 100 * 0.02), // 2% commission
+        photo_url: photoUrl,
+        status: 'completed'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      username: saleData.username,
+      item_description: data.item_description,
+      amount_cents: data.amount_cents,
+      commission_cents: data.commission_cents,
+      timestamp: data.timestamp,
+      photo_path: data.photo_url,
+      status: data.status,
+      created_at: data.created_at,
+    };
+  } catch (error) {
+    throw new Error('Failed to save sale');
+  }
 };
 
 export const getSales = async (username) => {
-  // Return sales from IndexedDB for the user
-  return await getSalesFromDB(username);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return data.map(sale => ({
+      id: sale.id,
+      username: username,
+      item_description: sale.item_description,
+      amount_cents: sale.amount_cents,
+      commission_cents: sale.commission_cents,
+      timestamp: sale.timestamp,
+      photo_path: sale.photo_url,
+      status: sale.status,
+      created_at: sale.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching sales:', error);
+    return [];
+  }
 };
 
 export const replaceUserSales = async (username, sales) => {
-  return await replaceUserSalesInDB(username, sales);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Delete existing sales
+    const { error: deleteError } = await supabase
+      .from('sales')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (deleteError) throw deleteError;
+
+    // Insert new sales
+    if (sales.length > 0) {
+      const salesToInsert = sales.map(sale => ({
+        user_id: user.id,
+        item_description: sale.item_description,
+        amount_cents: sale.amount_cents,
+        commission_cents: sale.commission_cents,
+        timestamp: sale.timestamp,
+        photo_url: sale.photo_path,
+        status: sale.status,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('sales')
+        .insert(salesToInsert);
+
+      if (insertError) throw insertError;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error replacing sales:', error);
+    throw error;
+  }
 };
 
 export const checkHealth = async () => {
@@ -286,14 +443,87 @@ export const checkHealth = async () => {
 };
 
 // Logout function
-export const logout = () => {
-  // Only clear session data, keep user data for persistence
+export const logout = async () => {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error('Error signing out:', error);
+  }
+  // Clear any local legacy data
   localStorage.removeItem('token');
-  // Don't clear sales data, avatars, or credentials - they should persist
-  // Don't redirect here, let AuthContext handle it
 };
 
-// Check if user is authenticated (not used anymore, AuthContext handles this)
-export const isAuthenticated = () => {
-  return false; // Always false since we don't persist auth
+// Migration utility for existing local data
+export const migrateLocalDataToSupabase = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Get existing local credentials
+    const localCredentials = getUserCredentials();
+    if (!localCredentials) {
+      return { migrated: false, message: 'No local data found to migrate' };
+    }
+
+    // Get existing local sales
+    const localSales = getSalesFromStorage(localCredentials.username) || [];
+
+    // Get existing local avatar
+    const localAvatar = getUserAvatar(localCredentials.username);
+
+    // Migrate sales to Supabase
+    if (localSales.length > 0) {
+      const salesToInsert = localSales.map(sale => ({
+        user_id: user.id,
+        item_description: sale.item_description,
+        amount_cents: sale.amount_cents,
+        commission_cents: sale.commission_cents,
+        timestamp: sale.timestamp,
+        photo_url: sale.photo_path,
+        status: sale.status,
+      }));
+
+      const { error: salesError } = await supabase
+        .from('sales')
+        .insert(salesToInsert);
+
+      if (salesError) throw salesError;
+    }
+
+    // Migrate avatar if exists
+    if (localAvatar) {
+      // Convert base64 to blob and upload
+      try {
+        const response = await fetch(localAvatar);
+        const blob = await response.blob();
+        const file = new File([blob], 'migrated-avatar.jpg', { type: 'image/jpeg' });
+        await saveUserAvatar(file, localCredentials.username);
+      } catch (avatarError) {
+        console.warn('Failed to migrate avatar:', avatarError);
+      }
+    }
+
+    // Clear local data after successful migration
+    localStorage.removeItem(USER_CREDENTIALS_KEY);
+    localStorage.removeItem(getUserSalesKey(localCredentials.username));
+    localStorage.removeItem(getUserAvatarKey(localCredentials.username));
+
+    return {
+      migrated: true,
+      message: `Successfully migrated ${localSales.length} sales and avatar data to Supabase`
+    };
+  } catch (error) {
+    console.error('Migration failed:', error);
+    throw new Error('Failed to migrate local data to Supabase');
+  }
+};
+
+// Check if user has local data that needs migration
+export const hasLocalDataToMigrate = () => {
+  const localCredentials = getUserCredentials();
+  if (!localCredentials) return false;
+
+  const localSales = getSalesFromStorage(localCredentials.username) || [];
+  const localAvatar = getUserAvatar(localCredentials.username);
+
+  return localSales.length > 0 || !!localAvatar;
 };

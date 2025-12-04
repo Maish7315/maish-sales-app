@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getSalesFromStorage, cleanupOldSales, getSales, replaceUserSales } from '@/services/api';
+import { getSalesFromStorage, cleanupOldSales, getSales, replaceUserSales, hasLocalDataToMigrate, migrateLocalDataToSupabase } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,9 +52,26 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (user) {
-      // Clean up old sales on component mount
-      cleanupOldSales(user.username);
-      loadSales();
+      const initializeData = async () => {
+        // Check if there's local data to migrate
+        if (hasLocalDataToMigrate()) {
+          try {
+            const result = await migrateLocalDataToSupabase();
+            if (result.migrated) {
+              toast.success(result.message);
+            }
+          } catch (error) {
+            console.error('Migration failed:', error);
+            toast.error('Failed to migrate local data');
+          }
+        }
+
+        // Clean up old sales on component mount
+        cleanupOldSales(user.username);
+        loadSales();
+      };
+
+      initializeData();
 
       // Set up periodic cleanup every hour
       const cleanupInterval = setInterval(() => {
