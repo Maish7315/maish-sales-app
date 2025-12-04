@@ -242,6 +242,85 @@ export const resetPassword = async (idNumber, newPassword) => {
   return { success: true, message: 'Password reset successfully' };
 };
 
+// Phone-based OTP password reset functions
+export const sendPasswordResetOTP = async (phoneNumber) => {
+  try {
+    // First, check if phone number exists in profiles
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('phone_number, id')
+      .eq('phone_number', phoneNumber)
+      .single();
+
+    if (profileError || !profiles) {
+      throw new Error('Phone number not found. Please check and try again.');
+    }
+
+    // Send OTP to phone number using Supabase Auth
+    const { data, error } = await supabase.auth.signInWithOtp({
+      phone: phoneNumber,
+    });
+
+    if (error) {
+      throw new Error('Failed to send verification code. Please try again.');
+    }
+
+    return {
+      success: true,
+      message: 'Verification code sent to your phone',
+      userId: profiles.id
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const verifyPasswordResetOTP = async (phoneNumber, otp, newPassword) => {
+  try {
+    // Verify the OTP
+    const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
+      phone: phoneNumber,
+      token: otp,
+      type: 'sms'
+    });
+
+    if (verifyError) {
+      throw new Error('Invalid verification code. Please try again.');
+    }
+
+    // Get user profile to find the associated email
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .eq('phone_number', phoneNumber)
+      .single();
+
+    if (profileError || !profile) {
+      throw new Error('User profile not found.');
+    }
+
+    // Update password using Supabase Auth
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    if (updateError) {
+      throw new Error('Failed to update password. Please try again.');
+    }
+
+    // Sign out the temporary session
+    await supabase.auth.signOut();
+
+    return {
+      success: true,
+      message: 'Password reset successfully! Please sign in with your new password.',
+      username: profile.username
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
 // Authentication functions using Supabase
 export const signup = async (data) => {
   try {
