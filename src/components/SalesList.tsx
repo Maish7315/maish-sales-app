@@ -114,6 +114,23 @@ export const SalesList = ({ sales }: SalesListProps) => {
     window.open(whatsappUrl, '_blank');
   };
 
+  const handleImageClick = (sale: Sale) => {
+    if (!sale.photo_path) return;
+
+    const phoneNumber = '254740297140';
+    const message = encodeURIComponent(`*Receipt Image - ${user?.username || 'User'}*\n\nItem: ${sale.item_description}\nAmount: KES ${(sale.amount_cents / 100).toFixed(2)}\nCommission: KES ${(sale.commission_cents / 100).toFixed(2)}\nDate: ${format(new Date(sale.created_at), 'PPp')}\n\n*📱 Sent from Maish Boutique Sales Tracker*`);
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+
+    // Also download the image for attachment
+    const link = document.createElement('a');
+    link.href = sale.photo_path;
+    link.download = `receipt_${sale.id}_${sale.item_description.replace(/\s+/g, '_')}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (sales.length === 0) {
     return (
       <Card className="shadow-md">
@@ -211,9 +228,9 @@ export const SalesList = ({ sales }: SalesListProps) => {
 
                     {sale.photo_path && (
                       <div className="mt-4">
-                        <button 
+                        <button
                           className="w-full group"
-                          onClick={() => setSelectedImage(sale.photo_path)}
+                          onClick={() => handleImageClick(sale)}
                         >
                           <div className="relative overflow-hidden rounded-lg border">
                             <img
@@ -224,7 +241,7 @@ export const SalesList = ({ sales }: SalesListProps) => {
                             />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
                               <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                Click to view full size
+                                Click to send to WhatsApp
                               </span>
                             </div>
                           </div>
